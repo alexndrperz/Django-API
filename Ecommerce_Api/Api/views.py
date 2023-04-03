@@ -10,11 +10,11 @@ class ProductView(View):
     
     def get(self, request):
 
-        products = list(Product.objects.values())
+        products = list(Product.objects.values('id','nameProduct','priceProduct','active'))
         if(len(products) > 0):
             data= {
                 'message':'Success',
-                'products':products
+                'products':  products
             }
         else: 
             data={
@@ -33,16 +33,30 @@ class ProductView(View):
         pass
 
 
-class CategoryView(APIView):
+class CategoryView(View):
      def get(self, request, format=None):
+        
+        categories = list(Category.objects.values())
+        products = list(Product.objects.values())
+        
+        count = 0
+        for categorie in categories:
+            categorieObj = Category.objects.get(id=categorie['id'])
+            quantity = categorieObj.products_quantity
+            categorie['products_Count'] = quantity
+            products = Product.objects.filter(category_id=categorie['id'])
+            categorie['products'] = list(products.values('id','nameProduct','active'))
 
-        categories = Category.objects.all()
-        products = Product.objects.all()
 
-        # Creamos un diccionario donde almacenaremos las categorias y sus productos
-        data = {}
-        for category in categories:
-            serializer = ProductSerializer(products.filter(category_id=category.id), many=True)
-            data[category.nameCategory] = {'products':serializer.data}
-
+        if(len(categories) > 0):
+            data = {
+                'message': 'Success',
+                'categories':categories,
+            }
+        else:
+            data = {
+                'message':'Fail'
+            }
+        
+            
         return JsonResponse(data)
