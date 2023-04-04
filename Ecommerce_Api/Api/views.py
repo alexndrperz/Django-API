@@ -1,16 +1,22 @@
 from django.views import View
 from django.http.response import JsonResponse, HttpResponse
-from .models import Product,Category
-from .serializers import ProductSerializer
-from rest_framework.response import Response
-from rest_framework.views import APIView
+from .models import Product,Category,Sellers
+# from .serializers import ProductSerializer
+# from rest_framework.response import Response
+# from rest_framework.views imporcd apt APIView
 # Create your views here.
 
 class ProductView(View):
     
     def get(self, request):
+        products = list(Product.objects.values('id', 'nameProduct','priceProduct','dateReleased', 'category_id_id'))
+        
+        for product in products:
+            category = Category.objects.get(id=product['category_id_id'])
+            product['category'] = category.nameCategory
+            del product['category_id_id']
 
-        products = list(Product.objects.values('id','nameProduct','priceProduct','active'))
+        
         if(len(products) > 0):
             data= {
                 'message':'Success',
@@ -39,7 +45,6 @@ class CategoryView(View):
         categories = list(Category.objects.values())
         products = list(Product.objects.values())
         
-        count = 0
         for categorie in categories:
             categorieObj = Category.objects.get(id=categorie['id'])
             quantity = categorieObj.products_quantity
@@ -59,4 +64,14 @@ class CategoryView(View):
             }
         
             
+        return JsonResponse(data)
+
+
+class SellersView(View):
+    def get(self, request, format=None):
+        sellers = list(Sellers.objects.values())
+        data = {
+            'message': 'Success',   
+            'sellers': sellers
+        }
         return JsonResponse(data)
