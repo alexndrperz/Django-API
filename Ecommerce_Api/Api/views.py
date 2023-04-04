@@ -96,8 +96,9 @@ class SellersView(View):
 class TransactsView(View):
     def get(self, request, format=None):
         transacts = list(Transacts.objects.values())
-        products = list(Product.objects.values('id', 'nameProduct','priceProduct','dateReleased', 'category_id_id'))
+        products = list(Product.objects.values())
         buyers = list(Buyers.objects.values())
+        sellers = list(Sellers.objects.values())
 
         # Serializers, estas lineas estan proximas a cambiarse
         for buyer in buyers:
@@ -106,6 +107,12 @@ class TransactsView(View):
         for product in products:
             category = Category.objects.get(id=product['category_id_id'])
             product['category'] = category.nameCategory
+            seller = list(filter(lambda x:x['id']==product['seller_id_id'],sellers))
+            product['seller'] = seller[0]
+            del product['category_id_id']
+            del product['seller_id_id']
+            del product['active']
+
             
         for transact in transacts:
             transact['dateTransact'] = transact['dateTransact'].strftime('%m/%d/%Y %I:%M:%S %p')
