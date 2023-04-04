@@ -16,8 +16,16 @@ class Product(models.Model):
     nameProduct = models.CharField(max_length=50)
     priceProduct = models.CharField(max_length=50)
     dateReleased = models.DateField(auto_now_add=True)
-    active = models.BooleanField(default="false")
+    active = models.BooleanField(default=False)
     seller_id = models.ForeignKey(Sellers, on_delete=models.CASCADE)
     category_id = models.ForeignKey(Category, on_delete=models.CASCADE)
 
+class Buyers(models.Model):
+    nameBuyer = models.CharField(max_length=50)
+    lastNameBuyer = models.CharField(max_length=50)
+    dateRegister = models.DateTimeField(auto_now_add=True)
 
+class Transacts(models.Model):
+    dateTransact = models.DateTimeField(auto_now_add=True)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE,  default=1)
+    buyers = models.ForeignKey(Buyers, on_delete=models.CASCADE, default=1)
