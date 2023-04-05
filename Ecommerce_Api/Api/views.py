@@ -72,16 +72,24 @@ class SellersView(View):
         sellers = list(Sellers.objects.values())
         products = list(Product.objects.values('id', 'nameProduct','priceProduct','dateReleased', 'category_id_id','seller_id_id'))
         
+
         for product in products:
             category = Category.objects.get(id=product['category_id_id'])
             product['category'] = category.nameCategory
             del product['category_id_id']
 
-
         for seller in sellers:
-            productsSeller = list(filter(lambda x:x['seller_id_id']==seller['id'],products))
-            seller['products'] = productsSeller
-
+            productsSeller = Product.objects.filter(seller_id_id = seller['id'])
+            products_list = []
+            for product in productsSeller:
+                products = {
+                    'id': product.nameProduct,
+                    'nameProduct': product.priceProduct,
+                    'dateReleased': product.dateReleased,
+                    'active': product.active
+                }
+                products_list.append(products)
+            seller['products'] = products_list
         if(len(sellers) > 0):
             data = {
                 'message': 'Success',   
