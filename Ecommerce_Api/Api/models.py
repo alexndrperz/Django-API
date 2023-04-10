@@ -1,4 +1,30 @@
 from django.db import models
+from django.contrib.auth.models import (
+    AbstractBaseUser,
+    PermissionsMixin,
+    BaseUserManager,
+    Group
+)
+
+class UserManager(BaseUserManager):
+    def create_user(self,email, password, **args):
+        if not email:
+            raise ValueError('Falta email')
+        user = self.model(email=email, **args)
+        user.set_password(password)
+        user.save(using=self._db)
+
+        return user
+
+class user(AbstractBaseUser, PermissionsMixin):
+    email = models.EmailField(max_length=254, unique=True)
+    name  = models.CharField(max_length=50)
+    is_staff = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+
+    USERNAME_FIELD = 'email'
+
+    objects = UserManager()
 
 # Create your models here.
 class Sellers(models.Model):
@@ -29,3 +55,5 @@ class Transacts(models.Model):
     dateTransact = models.DateTimeField(auto_now_add=True)
     product = models.ForeignKey(Product, on_delete=models.CASCADE,  default=1)
     buyers = models.ForeignKey(Buyers, on_delete=models.CASCADE, default=1)
+
+
