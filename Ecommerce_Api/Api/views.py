@@ -1,19 +1,26 @@
 from django.views import View
-from rest_framework import viewsets,permissions, authentication,mixins
+from rest_framework import viewsets,permissions, authentication,mixins, exceptions
 from rest_framework.permissions import IsAuthenticated
 from django.http.response import JsonResponse 
 from .models import Product,Category,Sellers,Transacts,Buyers
-from .serializers import BuyerSerializer, TransactsSerializer, SellerSerializer, CategorySerializer, ProductSerializer
+from .serializers import (BuyerSerializer, 
+                          TransactsSerializer, 
+                          SellerSerializer, 
+                          CategorySerializer,
+                          CategoryWithoutProductsSerializer, 
+                          ProductSerializer,)
 
-def format_data(data, nameClass, error=False):
+def format_data(data=None, nameClass=None, code=200):
     status = 0
-    if error:
-        return {'message':'Ha habido un error en el servidor', 'status':500}
+    if data==None and nameClass==None and code==200:
+        return "No hay nada en la funcion"
+    if code ==500:
+        return {'message':'Ha habido un error en el servidor', 'status':code}
     if (len(data) > 0):
         result = {
             'success':True,
             nameClass:data,
-            'status':200
+            'status':code
         }
     else: 
         result = {
@@ -56,8 +63,26 @@ class CategoryView(viewsets.ModelViewSet):
             serializer = CategorySerializer(categories, many=True)
             dicc = format_data(serializer.data, 'categorias')
             return JsonResponse(dicc, status=dicc['status'])   
-        except:
-            return JsonResponse()
+        except Exception as e:
+            dicc=format_data(code=500)
+            print(e)
+            return JsonResponse(dicc, status=dicc['status'])
+        
+    #POST Instance
+    def post_category(self, request):
+        try:
+            try: 
+                serializer = self.get_serializer(data=request.data)
+                serializer.is_valid(raise_exception = True)
+            except exceptions.UnsupportedMediaType as e:
+                return JsonResponse({'message':'El formato de su request no es valido', 'status':400}, status=400)
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+            return JsonResponse(serializer.data, status=201, headers=headers)
+        except Exception as e:
+            print(e)
+            dicc = format_data(code=500)
+            return JsonResponse(dicc, status=dicc['status'])
 
 
 

@@ -10,13 +10,29 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category 
         fields =  ['id','nameCategory','product_count','products']
 
+    prop = 0
+
     def get_product_count(self,obj):
         count = obj.products_quantity
+        self.prop = count
         return count
     
     def get_products(self, obj):
+        if obj.products_quantity == 0:
+            products = "N/A"
+            return products
         products = Product.objects.filter(category_id=obj.id)
         return ProductSerializer(products, many=True).data
+
+class CategoryWithoutProductsSerializer(serializers.ModelSerializer):
+    product_count = serializers.SerializerMethodField()
+    class Meta:
+        model = Category 
+        fields =  ['id','nameCategory','product_count']
+        
+        def get_product_count(self,obj):
+            count = obj.products_quantity
+            return count
 
 class CategoryNestedSerializer(serializers.ModelSerializer):
     class Meta:
