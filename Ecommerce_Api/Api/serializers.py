@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Category, Product, Buyers,Transacts, Sellers
+from .models import Category, Product, Buyers,Transacts, Sellers,User
 
 
 
@@ -91,6 +91,11 @@ class TransactsSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Transacts 
         fields = ['id','dateTransact','product','buyers']
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = '__all__' 
 
 
     
