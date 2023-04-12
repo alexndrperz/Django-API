@@ -1,5 +1,7 @@
 from rest_framework import serializers
-from .models import Category, Product, Buyers,Transacts, Sellers,User
+from .models import Category, Product, Buyers,Transacts, Sellers
+from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import make_password
 
 
 
@@ -93,9 +95,16 @@ class TransactsSerializer(serializers.ModelSerializer):
         fields = ['id','dateTransact','product','buyers']
 
 class UserSerializer(serializers.ModelSerializer):
+    def create(self, validated_data):
+        validated_data['password'] = make_password(validated_data['password'])
+        print(validated_data)
+        return super().create(validated_data)
+
     class Meta:
-        model = User
-        fields = '__all__' 
+        model = get_user_model() 
+        extra_kwargs = {'password':{'write_only':True}}
+        fields = ['id','email','password','name','is_active','groups']
+
 
 
     

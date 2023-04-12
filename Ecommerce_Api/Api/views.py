@@ -135,6 +135,53 @@ class CategoryView(viewsets.ModelViewSet):
 class UserView(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
+
+    def get_all_users(self, request, *args, **kwargs):
+        try:
+            instances = User.objects.all()
+            serializer  = UserSerializer(instances, many=True)
+            dicc = format_data(serializer.data, 'categorias')
+            return JsonResponse(dicc, status=200)
+        except Exception as e:
+            print(e)
+            return JsonResponse({'message':'Hubo un error en el servidor'}, status=500)
+    
+    #POST new User
+    def post_user(self, request, *args, **kwargs):
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            header = self.get_success_headers(serializer.data)
+            return JsonResponse(serializer.data, status=200, headers=header)
+        except Exception as e:
+            print(e)
+            return JsonResponse({'message':'Hubo un error en el servidor', 'status':500}, status=500)
+        
+    # GET one User
+    def get_user(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            serializer = self.get_serializer(instance)
+            result = format_data(serializer.data)
+            return JsonResponse(result, status=200)
+        except Exception as e:
+            print(e)
+            return JsonResponse({'message':'Hubo un error en el servidor'}, status=500) 
+
+
+    # DELETE one User
+    def delete_user(self, request, *args, **kwargs):
+        try: 
+            instance=self.get_object()
+            self.perform_destroy(instance=instance)
+            return JsonResponse({'message':'El usuario ha sido eliminado correctamente', 'status':200}, status=200)
+        except Exception as e:
+            print(e)
+            return JsonResponse({'message':'error en el server', 'status':500}, status=500)
+        
+        
+
  
 
 
