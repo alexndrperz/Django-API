@@ -136,6 +136,7 @@ class UserView(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
 
+    # GET one User
     def get_all_users(self, request, *args, **kwargs):
         try:
             instances = User.objects.all()
