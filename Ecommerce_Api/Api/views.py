@@ -3,6 +3,8 @@ from django.http import response
 from rest_framework import viewsets,permissions, authentication,mixins, exceptions
 from rest_framework.permissions import IsAuthenticated
 from django.http.response import JsonResponse 
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.authtoken.views import  ObtainAuthToken 
 from .models import Product,Category,Sellers,Transacts,Buyers,User
 from .serializers import (BuyerSerializer, 
                           TransactsSerializer, 
@@ -10,7 +12,8 @@ from .serializers import (BuyerSerializer,
                           CategorySerializer,
                           CategoryWithoutProductsSerializer, 
                           ProductSerializer,
-                          UserSerializer)
+                          UserSerializer,
+                          AuthenticationSerializer)
 
 def format_data(data=None, nameClass=None, code=200):
     status = 0
@@ -35,8 +38,6 @@ def format_data(data=None, nameClass=None, code=200):
 class ProductView(viewsets.ModelViewSet):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    authentication_classes = [authentication.TokenAuthentication]
-    permission_classes = [IsAuthenticated]
     
 
     def finalize_response(self, request, response, *args, **kwargs):
@@ -57,6 +58,8 @@ class ProductView(viewsets.ModelViewSet):
 class CategoryView(viewsets.ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
+    authentication_classes = [authentication.TokenAuthentication]
+    permission_classes = [IsAuthenticated]
 
     #GET all Categories
     def nested_list_categories(self, request):
@@ -64,6 +67,12 @@ class CategoryView(viewsets.ModelViewSet):
             categories = Category.objects.all()
             serializer = CategorySerializer(categories, many=True)
             dicc = format_data(serializer.data, 'categorias')
+            dicc['user'] = {
+                'id': request.user.id,
+                'name': request.user.name,
+                'email': request.user.email,
+                'group': list(request.user.groups.values_list('name', flat=True))
+            }
             return JsonResponse(dicc, status=dicc['status'])   
         except Exception as e:
             dicc=format_data(code=500)
@@ -91,7 +100,7 @@ class CategoryView(viewsets.ModelViewSet):
             except exceptions.UnsupportedMediaType as e:
                 return JsonResponse({'message':'El formato de su request no es valido', 'status':400}, status=400)
             except exceptions.ValidationError as e:
-                return JsonResponse({'message':'Ha dejado uno o mas campos requeridos vacios', 'status':400}, status=400)
+                return JsonResponse({'message':e.detail, 'status':400}, status=400)
             self.perform_create(serializer)
             headers = self.get_success_headers(serializer.data)
             return JsonResponse(serializer.data, status=201, headers=headers)
@@ -155,10 +164,15 @@ class UserView(viewsets.ModelViewSet):
             self.perform_create(serializer)
             header = self.get_success_headers(serializer.data)
             return JsonResponse(serializer.data, status=200, headers=header)
+        except exceptions.ValidationError as e:
+            return JsonResponse({'message': e.detail, 'status':400}, status=400)
+        except (exceptions.UnsupportedMediaType, exceptions.ParseError) as e:
+            return JsonResponse({'message':'El formato de su request no es valido', 'status':400}, status=400)
         except Exception as e:
             print(e)
+            print(type(e))
             return JsonResponse({'message':'Hubo un error en el servidor', 'status':500}, status=500)
-        
+
     # GET one User
     def get_user(self, request, *args, **kwargs):
         try:
@@ -180,6 +194,9 @@ class UserView(viewsets.ModelViewSet):
         except Exception as e:
             print(e)
             return JsonResponse({'message':'error en el server', 'status':500}, status=500)
+    
+class AuthenticationView(ObtainAuthToken):
+    serializer_class = AuthenticationSerializer
         
         
 

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import Category, Product, Buyers,Transacts, Sellers
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, authenticate
 from django.contrib.auth.hashers import make_password
 
 
@@ -106,7 +106,25 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id','email','password','name','is_active','groups']
 
 
+class AuthenticationSerializer(serializers.Serializer):
+    email= serializers.EmailField()
+    password = serializers.CharField(style={'input_type':'password'})
 
+    def validate(self, data):
+        email = data.get('email')
+        password = data.get('password')
+        print(password)
+        user = authenticate(
+            request= self.context.get('request'),
+            username=email,
+            password = password
+        )  
+
+        if not user:
+            raise serializers.ValidationError('Pa fuera jakel', code='authorization')
+
+        data['user'] = user 
+        return data
     
 
 
