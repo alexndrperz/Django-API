@@ -106,6 +106,8 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id','email','password','name','is_active','groups']
 
 
+
+
 class AuthenticationSerializer(serializers.Serializer):
     email= serializers.EmailField()
     password = serializers.CharField(style={'input_type':'password'})

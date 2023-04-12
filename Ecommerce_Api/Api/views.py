@@ -4,7 +4,8 @@ from rest_framework import viewsets,permissions, authentication,mixins, exceptio
 from rest_framework.permissions import IsAuthenticated
 from django.http.response import JsonResponse 
 from rest_framework.authentication import TokenAuthentication
-from rest_framework.authtoken.views import  ObtainAuthToken 
+from rest_framework.authtoken.views import  ObtainAuthToken
+from django.contrib.auth.models import Group
 from .models import Product,Category,Sellers,Transacts,Buyers,User
 from .serializers import (BuyerSerializer, 
                           TransactsSerializer, 
@@ -159,19 +160,27 @@ class UserView(viewsets.ModelViewSet):
     #POST new User
     def post_user(self, request, *args, **kwargs):
         try:
+            group_name= request.data.pop('groups', None)
+            print(group_name)
+ 
+            group= Group.objects.get(name=group_name)
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            self.perform_create(serializer)
+            user = serializer.save()
+            user.groups.add(group)
+            finaldicc = serializer.data
+            finaldicc['groups'] = group_name
+            
             header = self.get_success_headers(serializer.data)
-            return JsonResponse(serializer.data, status=200, headers=header)
+            return JsonResponse(finaldicc, status=200, headers=header)
         except exceptions.ValidationError as e:
             return JsonResponse({'message': e.detail, 'status':400}, status=400)
         except (exceptions.UnsupportedMediaType, exceptions.ParseError) as e:
             return JsonResponse({'message':'El formato de su request no es valido', 'status':400}, status=400)
-        except Exception as e:
-            print(e)
-            print(type(e))
-            return JsonResponse({'message':'Hubo un error en el servidor', 'status':500}, status=500)
+        # except Exception as e:
+        #     print(e)
+        #     print(type(e))
+        #     return JsonResponse({'message':'Hubo un error en el servidor', 'status':500}, status=500)
 
     # GET one User
     def get_user(self, request, *args, **kwargs):
