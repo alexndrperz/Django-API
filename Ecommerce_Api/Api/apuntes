@@ -37,3 +37,17 @@ class CategoryView(viewsets.ModelViewSet):
         instance = self.get_object()
         self.perform_destroy(instance)
         return Response({'success': True}, status=status.HTTP_204_NO_CONTENT)
+
+
+class ProductSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields = ('id', 'name', 'price', 'description', 'sellers_id')
+        
+    def create(self, validated_data):
+        validated_data['sellers_id'] = self.context['request'].user.id
+        return super().create(validated_data)
+        
+    def update(self, instance, validated_data):
+        validated_data['sellers_id'] = self.context['request'].user.id
+        return super().update(instance, validated_data)

@@ -14,7 +14,8 @@ from .serializers import (BuyerSerializer,
                           CategoryWithoutProductsSerializer, 
                           ProductSerializer,
                           UserSerializer,
-                          AuthenticationSerializer)
+                          AuthenticationSerializer,
+                          GroupsSerializer)
 
 def format_data(data=None, nameClass=None, code=200):
     status = 0
@@ -36,22 +37,29 @@ def format_data(data=None, nameClass=None, code=200):
         }
     return result
 
+def validate_group(user, groups):
+    if list(user.groups.values_list('name',flat=True)) == []:
+        return None
+    if list(user.groups.values_list('name',flat=True))[0] not in groups:
+        return False
+    else:
+        return True
+
 class ProductView(viewsets.ModelViewSet):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    
+    authentication_classes = [authentication.TokenAuthentication]
 
-    def finalize_response(self, request, response, *args, **kwargs):
-        if response.status_code == 200:
-            if len(response.data) == 0:
-                return JsonResponse({'message':'Fail'}, status=404)
-            response.data = {
-                'success' :True,
-                'products' : response.data 
-            }
-            
-        return super().finalize_response(request, response, *args, **kwargs)
-
+    def nested_list_products(self, request):
+        if request.user.is_authenticated ==  False:
+            return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
+        validator = validate_group(request.user, ['administrator','checkers'])
+        if validator == False and request.user.is_superuser == False:
+            return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
+        if validate_group(request.user, ['sellers']):
+            products = Product.objects.filter(seller_id=request.user.id)
+            print(products)    
+        return JsonResponse({'message':'asdasd'}, status=200)
 
 
 
@@ -60,11 +68,12 @@ class CategoryView(viewsets.ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     authentication_classes = [authentication.TokenAuthentication]
-    permission_classes = [IsAuthenticated]
 
     #GET all Categories
     def nested_list_categories(self, request):
         try: 
+            if request.user.is_authenticated == False:
+                return JsonResponse({'message':'No autorizado'}, status=401)
             categories = Category.objects.all()
             serializer = CategorySerializer(categories, many=True)
             dicc = format_data(serializer.data, 'categorias')
@@ -140,7 +149,6 @@ class CategoryView(viewsets.ModelViewSet):
             dicc = format_data(code=500)
             return JsonResponse(dicc, status=dicc['status'])
         return JsonResponse({'message': 'El campo fue borrado correctamente', 'status':200}, status=200)
-        
 
 class UserView(viewsets.ModelViewSet):
     queryset = User.objects.all()
@@ -206,12 +214,6 @@ class UserView(viewsets.ModelViewSet):
     
 class AuthenticationView(ObtainAuthToken):
     serializer_class = AuthenticationSerializer
-        
-        
-
- 
-
-
 
 class SellersView(viewsets.ModelViewSet):
     queryset = Sellers.objects.all()
@@ -224,7 +226,6 @@ class SellersView(viewsets.ModelViewSet):
                 'sellers' : response.data 
             }
         return super().finalize_response(request, response, *args, **kwargs)
-
 
 class TransactsView(viewsets.ModelViewSet):
     queryset = Transacts.objects.all()
@@ -239,8 +240,6 @@ class TransactsView(viewsets.ModelViewSet):
         
         return super().finalize_response(request, response)
     
-
-
 class BuyersView(viewsets.ModelViewSet):
     queryset = Buyers.objects.all()
     serializer_class = BuyerSerializer
@@ -253,3 +252,13 @@ class BuyersView(viewsets.ModelViewSet):
                 'buyers': response.data
             }
         return super().finalize_response(request, response)
+
+class GroupsView(viewsets.ModelViewSet):
+    queryset = Group.objects.all()
+    serializer_class = GroupsSerializer
+
+    def nested_list(self, request):
+        groups = list(Group.objects.all())
+        data = [{'id':group.id, 'name':group.name}for group in groups]
+        data = format_data(data, nameClass='groups')
+        return JsonResponse(data, status=200)

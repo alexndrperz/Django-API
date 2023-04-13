@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import Category, Product, Buyers,Transacts, Sellers
 from django.contrib.auth import get_user_model, authenticate
 from django.contrib.auth.hashers import make_password
+from django.contrib.auth.models import Group
 
 
 
@@ -127,6 +128,12 @@ class AuthenticationSerializer(serializers.Serializer):
 
         data['user'] = user 
         return data
+
+class GroupsSerializer(serializers.Serializer):
+    class Meta:
+        model = Group
+        fields = '__all__'
+
     
 
 
