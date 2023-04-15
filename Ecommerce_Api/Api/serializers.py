@@ -13,8 +13,6 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category 
         fields =  ['id','nameCategory','product_count','products']
 
-    prop = 0
-
     def get_product_count(self,obj):
         count = obj.products_quantity
         self.prop = count
@@ -55,6 +53,14 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = ['id','nameProduct','priceProduct','dateReleased','active','category']
+
+class ProductCreatorSerializer(serializers.ModelSerializer):
+    seller_id = serializers.ReadOnlyField()
+    
+    class Meta:
+        model  = Product
+        fields = ['id','nameProduct','priceProduct', 'active','category_id', 'seller_id']
+
 
 class TransactBuyersNestedSerializer(serializers.ModelSerializer):
     dateRegister = serializers.DateTimeField(format="%m/%d/%Y %I:%M:%S %p")

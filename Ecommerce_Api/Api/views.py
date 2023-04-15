@@ -13,6 +13,7 @@ from .serializers import (BuyerSerializer,
                           CategorySerializer,
                           CategoryWithoutProductsSerializer, 
                           ProductSerializer,
+                          ProductCreatorSerializer,
                           UserSerializer,
                           AuthenticationSerializer,
                           GroupsSerializer)
@@ -37,6 +38,8 @@ def format_data(data=None, nameClass=None, code=200):
         }
     return result
 
+
+
 def validate_group(user, groups):
     if list(user.groups.values_list('name',flat=True)) == []:
         return None
@@ -50,16 +53,117 @@ class ProductView(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
     authentication_classes = [authentication.TokenAuthentication]
 
+    # GET all Products (with restrictions for sellers)
     def nested_list_products(self, request):
         if request.user.is_authenticated ==  False:
             return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
-        validator = validate_group(request.user, ['administrator','checkers'])
+        validator = validate_group(request.user, ['administrator','sellers', 'checkers'])
         if validator == False and request.user.is_superuser == False:
             return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
         if validate_group(request.user, ['sellers']):
             products = Product.objects.filter(seller_id=request.user.id)
-            print(products)    
-        return JsonResponse({'message':'asdasd'}, status=200)
+            serializer= ProductSerializer(products, many=True)   
+            data = serializer.data
+        return JsonResponse(list(data), status=200,safe=False)
+    # GET just one product (Also with restricctions)
+    def get_product(self, request, *args, **kwargs):
+        try:
+            
+            if request.user.is_authenticated ==  False:
+                return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
+            validator = validate_group(request.user, ['administrator','sellers', 'checkers'])
+            instance = self.get_object()
+            if validator == False and request.user.is_superuser == False:
+                return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
+            if validate_group(request.user, ['sellers']):
+                if instance.seller_id.id != request.user.id:
+                    return JsonResponse({'success':False, 'message':'No ha vendido este producto'}, status=404)
+            serializer = self.get_serializer(instance)
+            return JsonResponse(serializer.data,status=200)
+        except Exception as e:
+            print(e)
+            print(type(e))
+            return JsonResponse({}, status=500)
+    # POST a new product (Taking Seller id)
+    def post_product(self,request):
+        if request.user.is_authenticated ==  False:
+            return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
+        validator = validate_group(request.user, ['administrator','sellers', 'checkers'])
+        if validator == False and request.user.is_superuser == False:
+            return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
+        serializer = ProductCreatorSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        self.get_success_headers(serializer.data)
+        dicc = serializer.data
+        groupUser = Group.objects.get(id=request.user.groups.values_list('id', flat=True)[0])
+        dicc['seller_id'] = {
+            'id':request.user.id,
+            'name':request.user.name,
+            'email':request.user.email,
+            'group':str(groupUser)
+        } 
+
+        return JsonResponse(dicc, status=200)
+    # PUT a product created by a seller
+    def update_product(self, request,*args, **kwargs):
+        try:
+            instance = self.get_object()
+            if request.user.is_authenticated ==  False:
+                return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
+            validator = validate_group(request.user, ['administrator','sellers', 'checkers'])
+            if validator == False and request.user.is_superuser == False:
+                return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
+            if validate_group(request.user, ['sellers']):
+                if instance.seller_id.id != request.user.id:
+                    return JsonResponse({'success':False, 'message':'No ha vendido este producto'}, status=404)
+            
+            serializer = self.get_serializer(instance,data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            fields = list(serializer.get_fields().keys())
+            for key in request.data.keys():
+                if key not in fields:
+                    print(f"{key} no existe")
+                    raise exceptions.ValidationError
+            
+        except response.Http404:
+            return JsonResponse({'message':'No se encuentra la categoria', 'status':404}, status=404)
+        except exceptions.UnsupportedMediaType as e:
+            return JsonResponse({'message':'El formato de su request no es valido', 'status':400}, status=400)
+        except exceptions.ValidationError as e:
+            return JsonResponse({'message':'Ha dejado uno o mas campos requeridos vacios', 'status':400}, status=400)
+        except Exception as e:
+            print(e)
+            dicc = format_data(code=500)
+            return JsonResponse(dicc, status=dicc['status'])
+        self.perform_update(serializer)
+        return JsonResponse({'message':'El campo ha sido actualizado', 'status':200}, status=200)
+    # DELETE Product (with restrictions)
+    def delete_product(self, request, *args, **kwargs):
+        try:
+            if request.user.is_authenticated ==  False:
+                return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
+            validator = validate_group(request.user, ['administrator','sellers', 'checkers'])
+            instance = self.get_object()
+            if validator == False and request.user.is_superuser == False:
+                return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
+            if validate_group(request.user, ['sellers']):
+                if instance.seller_id.id != request.user.id:
+                    return JsonResponse({'success':False, 'message':'No ha vendido este producto'}, status=403)
+            instance= self.get_object()
+            self.perform_destroy(instance)
+            return JsonResponse({"Success":True, "message":"El producto fue borrado correctamente"}, status=200)
+        except response.Http404 as e:
+            return JsonResponse({"message":"No existe este producto"}, status=404)
+        except Exception as e:
+            print(e)
+            print(type(e))
+            return JsonResponse({}, status=500)
+
+    # Overrides
+    def perform_create(self, serializer):
+        serializer.save(seller_id=self.request.user)
+        print("asasd")
 
 
 

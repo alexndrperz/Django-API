@@ -52,7 +52,7 @@ class Product(models.Model):
     priceProduct = models.CharField(max_length=50)
     dateReleased = models.DateField(auto_now_add=True)
     active = models.BooleanField(default=False)
-    seller_id = models.ForeignKey(Sellers, on_delete=models.CASCADE)
+    seller_id = models.ForeignKey(User, on_delete=models.CASCADE)
     category_id = models.ForeignKey(Category, on_delete=models.CASCADE)
 
 class Buyers(models.Model):
