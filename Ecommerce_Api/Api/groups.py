@@ -14,3 +14,8 @@ def create_groups():
     sellers_group, created = Group.objects.get_or_create(name='sellers')
     if created:
         print('Grupo de sellers creado exitosamente')
+
+    # Crea el grupo buyers
+    buyers_group, created = Group.objects.get_or_create(name="buyers")
+    if created:
+        print('Grupo buyers creado sin problemas')

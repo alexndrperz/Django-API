@@ -1,10 +1,31 @@
 from rest_framework import serializers
-from .models import Category, Product, Buyers,Transacts, Sellers
+from .models import Category, Product,Transacts
 from django.contrib.auth import get_user_model, authenticate
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Group
 
 
+class GroupsSerializer(serializers.Serializer):
+    class Meta:
+        model = Group
+        fields = '__all__'
+
+
+
+class UserSerializer(serializers.ModelSerializer):
+    def create(self, validated_data):
+        validated_data['password'] = make_password(validated_data['password'])
+        print(validated_data)
+        return super().create(validated_data)
+    class Meta:
+        model = get_user_model() 
+        extra_kwargs = {'password':{'write_only':True}}
+        fields = ['id','email','password','name','is_active','groups']
+
+class UserNestedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model= get_user_model()
+        fields = ['id','name','is_active','groups']
 
 class CategorySerializer(serializers.ModelSerializer):
     product_count = serializers.SerializerMethodField()
@@ -40,19 +61,14 @@ class CategoryNestedSerializer(serializers.ModelSerializer):
         model = Category
         fields = ['id','nameCategory']
 
-class BuyerSerializer(serializers.ModelSerializer):
-    dateRegister = serializers.DateTimeField(format="%m/%d/%Y %I:%M:%S %p")
-    
-    class Meta:
-        model = Buyers
-        fields = '__all__'
 
 class ProductSerializer(serializers.ModelSerializer):
     category  = CategoryNestedSerializer(source="category_id")
-    
+    seller = UserNestedSerializer(source="seller_id")
+
     class Meta:
         model = Product
-        fields = ['id','nameProduct','priceProduct','dateReleased','active','category']
+        fields = ['id','nameProduct','priceProduct','dateReleased','active','category','seller']
 
 class ProductCreatorSerializer(serializers.ModelSerializer):
     seller_id = serializers.ReadOnlyField()
@@ -62,55 +78,41 @@ class ProductCreatorSerializer(serializers.ModelSerializer):
         fields = ['id','nameProduct','priceProduct', 'active','category_id', 'seller_id']
 
 
-class TransactBuyersNestedSerializer(serializers.ModelSerializer):
-    dateRegister = serializers.DateTimeField(format="%m/%d/%Y %I:%M:%S %p")
-    class Meta:
-        model = Buyers
-        fields = '__all__'
 
-class SellerSerializer(serializers.ModelSerializer):
-    products = serializers.SerializerMethodField()
+# class SellerSerializer(serializers.ModelSerializer):
+#     products = serializers.SerializerMethodField()
 
-    class Meta: 
-        model = Sellers
-        fields = ['id','nameSeller','lastNameSeller','registerDate', 'products']
+#     class Meta: 
+#         model = Sellers
+#         fields = ['id','nameSeller','lastNameSeller','registerDate', 'products']
 
-    def get_products(self, obj):
-        products = Product.objects.filter(seller_id=obj.id)
-        return ProductSerializer(products, many=True).data
+#     def get_products(self, obj):
+#         products = Product.objects.filter(seller_id=obj.id)
+#         return ProductSerializer(products, many=True).data
 
 
-class SellerNestedSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Sellers
-        fields = '__all__'
+# class SellerNestedSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Sellers
+#         fields = '__all__'
 
 class TransactProductNestedSerializer(serializers.ModelSerializer):
-    seller = SellerNestedSerializer(source='seller_id')
+    seller = UserNestedSerializer(source='seller_id')
 
     class Meta:
         model = Product
-        fields = ['id','nameProduct','priceProduct','dateReleased','active','seller']
+        fields = ['id','nameProduct','priceProduct','dateReleased','active', 'seller']
 
 class TransactsSerializer(serializers.ModelSerializer):
     product = TransactProductNestedSerializer()
-    buyers = TransactBuyersNestedSerializer()
+    buyers = UserNestedSerializer()
     dateTransact = serializers.DateTimeField(format="%m/%d/%Y %I:%M:%S %p")
     
     class Meta:
         model  = Transacts 
         fields = ['id','dateTransact','product','buyers']
 
-class UserSerializer(serializers.ModelSerializer):
-    def create(self, validated_data):
-        validated_data['password'] = make_password(validated_data['password'])
-        print(validated_data)
-        return super().create(validated_data)
 
-    class Meta:
-        model = get_user_model() 
-        extra_kwargs = {'password':{'write_only':True}}
-        fields = ['id','email','password','name','is_active','groups']
 
 
 
@@ -135,10 +137,7 @@ class AuthenticationSerializer(serializers.Serializer):
         data['user'] = user 
         return data
 
-class GroupsSerializer(serializers.Serializer):
-    class Meta:
-        model = Group
-        fields = '__all__'
+
 
     
 
