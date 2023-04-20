@@ -6,6 +6,7 @@ from django.http.response import JsonResponse
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.views import  ObtainAuthToken
 from django.contrib.auth.models import Group
+from django.core import serializers
 from .models import Product,Category,Transacts,User
 from .serializers import (TransactsSerializer, 
                           CategorySerializer,
@@ -106,11 +107,6 @@ class ProductView(viewsets.ModelViewSet):
         products = Product.objects.filter(is_digital=True)
         serializer = ProductSerializer(products, many=True)
         dicc=serializer.data
-        for dic in dicc:
-            groupID = dic['seller']['groups'][0]
-            group = Group.objects.filter(id=groupID).values('name').first()
-            dic['seller']['groups'] = group['name']
-            print(group)
             
         return JsonResponse(dicc, status=200, safe=False)
 
@@ -288,8 +284,16 @@ class UserView(viewsets.ModelViewSet):
 
     # GET one User
     def get_all_users(self, request, *args, **kwargs):
-        
-        instances = User.objects.all()
+        if request.user.is_authenticated ==  False:
+            return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
+        validator = validate_group(request.user, ['administrator','sellers', 'checkers','buyers'])
+        if validator == False and request.user.is_superuser == False:
+            return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
+        val = validate_group(request.user, ['sellers','buyers', 'checkers'])
+        if val == True:
+            instances = User.objects.filter(id=request.user.id)
+        else:
+            instances = User.objects.all()
         serializer  = UserSerializer(instances, many=True)
         dicc = format_data(serializer.data, 'categorias')
         return JsonResponse(dicc, status=200)
@@ -344,18 +348,6 @@ class UserView(viewsets.ModelViewSet):
 class AuthenticationView(ObtainAuthToken):
     serializer_class = AuthenticationSerializer
 
-# class SellersView(viewsets.ModelViewSet):
-#     queryset = Sellers.objects.all()
-#     serializer_class = SellerSerializer
-
-#     def finalize_response(self, request, response, *args, **kwargs):
-#         if response.status_code == 200:
-#             response.data = {
-#                 'success' :True,
-#                 'sellers' : response.data 
-#             }
-#         return super().finalize_response(request, response, *args, **kwargs)
-
 class TransactsView(viewsets.ModelViewSet):
     queryset = Transacts.objects.all()
     serializer_class = TransactsSerializer
@@ -366,46 +358,21 @@ class TransactsView(viewsets.ModelViewSet):
         validator = validate_group(request.user, ['administrator','sellers', 'checkers','buyers'])
         if validator == False and request.user.is_superuser == False:
             return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
-        if validate_group(request.user, ['sellers','buyers']):
-            transacts = Transacts.objects.filter(seller_id=request.user.id)
+        else:
+            val = validate_group(request.user, ['sellers','buyers'])
+        if validate_group(request.user, ['buyers']):
+            transacts = Transacts.objects.filter(buyers_id=request.user.id)
             serializer= TransactsSerializer(transacts, many=True)   
             dicc = serializer.data
-            for dic in dicc:
-                groupID = dic['seller']['groups'][0]
-                group = Group.objects.filter(id=groupID).values('name').first()
-                dic['seller']['groups'] = group['name']
-                print(group)
-            return JsonResponse(dicc, status=200, safe=False)
-
-
-    def finalize_response(self, request, response, *args, **kwargs):
-        if response.status_code == 200:
-            response.data = {
-                'success' :True,
-                'transacts' : response.data 
-            }
-        
-        return super().finalize_response(request, response)
-    
-# class BuyersView(viewsets.ModelViewSet):
-#     queryset = Buyers.objects.all()
-#     serializer_class = BuyerSerializer
-
-#     def finalize_response(self,request, response, *args,**kwargs):
-        
-#         if response.status_code == 200:
-#             response.data   = {
-#                 'success': True,
-#                 'buyers': response.data
-#             }
-#         return super().finalize_response(request, response)
+               
+        return JsonResponse(dicc, status=200, safe=False)
 
 class GroupsView(viewsets.ModelViewSet):
     queryset = Group.objects.all()
     serializer_class = GroupsSerializer
 
     def nested_list(self, request):
-        groups = list(Group.objects.all())
-        data = [{'id':group.id, 'name':group.name}for group in groups]
-        data = format_data(data, nameClass='groups')
-        return JsonResponse(data, status=200)
+        groups = Group.objects.all()
+        serializer = GroupsSerializer(groups, many=True)
+        print(serializer.data)
+        return JsonResponse(serializer.data, status=200, safe=False)

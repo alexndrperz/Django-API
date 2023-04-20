@@ -5,14 +5,27 @@ from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Group
 
 
-class GroupsSerializer(serializers.Serializer):
+class GroupsSerializer(serializers.Serializer): 
+
     class Meta:
         model = Group
-        fields = '__all__'
+        fields = ['id','name','users_count']
+       
 
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        rep['id'] = instance.id
+        rep['name'] = instance.name
+        rep['user_count'] = self.get_users_count(instance)
+        return rep
+
+    def get_users_count(self, obj):
+        count = obj.user_set.count()
+        return count 
 
 
 class UserSerializer(serializers.ModelSerializer):
+    group = serializers.SerializerMethodField()
     def create(self, validated_data):
         validated_data['password'] = make_password(validated_data['password'])
         print(validated_data)
@@ -20,12 +33,21 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = get_user_model() 
         extra_kwargs = {'password':{'write_only':True}}
-        fields = ['id','email','password','name','is_active','groups']
+        fields = ['id','email','password','name','is_active','group']
+    def get_group(self, obj):
+        return list(obj.groups.values_list('name',flat=True))
+
 
 class UserNestedSerializer(serializers.ModelSerializer):
+    group= serializers.SerializerMethodField()
+
     class Meta:
         model= get_user_model()
-        fields = ['id','name','is_active','groups']
+        fields = ['id','name','is_active','group']
+
+    def get_group(self, obj):
+        return list(obj.groups.values_list('name',flat=True))
+
 
 class CategorySerializer(serializers.ModelSerializer):
     product_count = serializers.SerializerMethodField()
@@ -124,7 +146,6 @@ class AuthenticationSerializer(serializers.Serializer):
     def validate(self, data):
         email = data.get('email')
         password = data.get('password')
-        print(password)
         user = authenticate(
             request= self.context.get('request'),
             username=email,
