@@ -90,7 +90,7 @@ class ProductSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ['id','nameProduct','priceProduct','dateReleased','active','category','seller']
+        fields = ['id','nameProduct','priceProduct','dateReleased','is_digital','active','category','seller']
 
 class ProductCreatorSerializer(serializers.ModelSerializer):
     seller_id = serializers.ReadOnlyField()

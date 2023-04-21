@@ -38,16 +38,18 @@ def format_data(data=None, nameClass=None, code=200):
         }
     return result
 
-def validate_credentials(request, is_one_item=False):
+def validate_credentials(request,groups,entity,userProperty=None,is_one_item=False, is_limited=False):
     if request.user.is_authenticated ==  False:
-        return {'success':False,'status':401}
-    validator = validate_group(request.user, ['administrator','sellers', 'checkers'])
+       return {'success':False,'status':401}
+    validator = validate_group(request.user, ['administrator','sellers', 'checkers','buyers'])
     if validator == False and request.user.is_superuser == False:
-        return {'success':False, 'status':403}
-    if is_one_item==True:
-        if validate_group(request.user, ['sellers',checkers]):
-            if instance.seller_id.id != request.user.id:
-                return {'success':False,'status':404}
+        return {'success':False,'status':403}
+    if is_limited:
+            return {'success':True, 'userid':request.user.id}
+    if is_one_item and is_limited:
+        if validate_group(request.user, groups):
+            if userProperty.id != request.user.id:
+                return {'success':False,'status':403}
 
 
 def validate_group(user, groups):
@@ -66,6 +68,8 @@ class ProductView(viewsets.ModelViewSet):
 
     # GET all Products (with restrictions for sellers)
     def nested_list_products(self, request):
+        validCred = validate_credentials(request)
+        print(validCred )
         if request.user.is_authenticated ==  False:
             return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
         validator = validate_group(request.user, ['administrator','sellers', 'checkers'])
@@ -74,13 +78,11 @@ class ProductView(viewsets.ModelViewSet):
         if validate_group(request.user, ['sellers']):
             products = Product.objects.filter(seller_id=request.user.id)
             serializer= ProductSerializer(products, many=True)   
-            data = serializer.data
-        return JsonResponse(list(data), status=200,safe=False)
+        return JsonResponse(serializer.data, status=200,safe=False)
     
     # GET just one product (Also with restricctions)
     def get_product(self, request, *args, **kwargs):
         try:
-            
             if request.user.is_authenticated ==  False:
                 return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
             validator = validate_group(request.user, ['administrator','sellers', 'checkers'])
@@ -93,8 +95,6 @@ class ProductView(viewsets.ModelViewSet):
             serializer = self.get_serializer(instance)
             return JsonResponse(serializer.data,status=200)
         except Exception as e:
-            print(e)
-            print(type(e))
             return JsonResponse({}, status=500)
     
     # GET Digital Products (Checkers)
@@ -106,9 +106,7 @@ class ProductView(viewsets.ModelViewSet):
             return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
         products = Product.objects.filter(is_digital=True)
         serializer = ProductSerializer(products, many=True)
-        dicc=serializer.data
-            
-        return JsonResponse(dicc, status=200, safe=False)
+        return JsonResponse(serializer.data, status=200, safe=False)
 
     # POST a new product (Taking Seller id)
     def post_product(self,request):
@@ -119,18 +117,10 @@ class ProductView(viewsets.ModelViewSet):
             return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
         serializer = ProductCreatorSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
+        obj = self.perform_create(serializer)
+        serializerResp = ProductSerializer(obj)
         self.get_success_headers(serializer.data)
-        dicc = serializer.data
-        groupUser = Group.objects.get(id=request.user.groups.values_list('id', flat=True)[0])
-        dicc['seller_id'] = {
-            'id':request.user.id,
-            'name':request.user.name,
-            'email':request.user.email,
-            'group':str(groupUser)
-        } 
-
-        return JsonResponse(dicc, status=200)
+        return JsonResponse(serializerResp.data, status=200)
     
     # PUT a product created by a seller
     def update_product(self, request,*args, **kwargs):
@@ -189,8 +179,8 @@ class ProductView(viewsets.ModelViewSet):
 
     # Overrides
     def perform_create(self, serializer):
-        serializer.save(seller_id=self.request.user)
-        print("asasd")
+        obj = serializer.save(seller_id=self.request.user)
+        return obj
 
 class CategoryView(viewsets.ModelViewSet):
     queryset = Category.objects.all()
@@ -205,12 +195,6 @@ class CategoryView(viewsets.ModelViewSet):
             categories = Category.objects.all()
             serializer = CategorySerializer(categories, many=True)
             dicc = format_data(serializer.data, 'categorias')
-            dicc['user'] = {
-                'id': request.user.id,
-                'name': request.user.name,
-                'email': request.user.email,
-                'group': list(request.user.groups.values_list('name', flat=True))
-            }
             return JsonResponse(dicc, status=dicc['status'])   
         except Exception as e:
             dicc=format_data(code=500)

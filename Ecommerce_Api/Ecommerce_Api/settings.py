@@ -33,7 +33,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
-JWT_EXPIRATION_DELTA = datetime.timedelta(minutes=1)
+# JWT_EXPIRATION_DELTA = datetime.timedelta(minutes=1)
 
 # Application definition
 
