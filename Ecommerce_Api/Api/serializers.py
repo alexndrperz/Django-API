@@ -1,9 +1,12 @@
 from django.forms import ValidationError
 from rest_framework import serializers
-from .models import Category, Product,Transacts,User
+from .models import Category, Product,Transacts,User,InvitationCodes
 from django.contrib.auth import get_user_model, authenticate
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Group
+import utils as uti
+import random
+import string
 
 
 class GroupsSerializer(serializers.Serializer): 
@@ -39,8 +42,16 @@ class UserSerializer(serializers.ModelSerializer):
         print(obj)
         return list(obj.groups.values_list('name',flat=True))
     
+class InvitationCodesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InvitationCodes
+        fields=['invitationCodes','description','is_used','realeased_date','expire_date']
 
-
+    def create(self, validated_data):
+        validated_data['InvitationCodes'] = uti.generate_invitation_code(8)
+        dictObj = InvitationCodes.objects.create(**validated_data)
+        dictObj.save()
+        return dictObj
 
 class UserCreatorSerializer(serializers.ModelSerializer):
     group_names = serializers.ListField(child=serializers.CharField())

@@ -7,6 +7,10 @@ from django.contrib.auth.models import (
     Group
 )
 
+from django.utils.timezone import now, timedelta 
+
+print(now())
+
 class UserManager(BaseUserManager):
     def create_user(self,email, password, **args):
         if not email:
@@ -54,5 +58,18 @@ class Transacts(models.Model):
     dateTransact = models.DateTimeField(auto_now_add=True)
     product = models.ForeignKey(Product, on_delete=models.CASCADE,  default=1)
     buyers = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
+
+class InvitationCodes(models.Model):
+    invitationCodes = models.CharField(max_length=8)
+    description = models.CharField(max_length=50)
+    is_used = models.BooleanField(default=False)
+    is_expired = models.BooleanField(default=False)
+    realeased_date = models.DateTimeField(auto_now_add=True)
+    expire_date = models.DateTimeField(default=now() + timedelta(days=7))
+    
+    def save(self, *args, **kwargs):
+        if self.expire_date < timezone.now():
+            self.is_expired = True
+        super().save(*args, **kwargs)
 
 

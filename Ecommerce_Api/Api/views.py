@@ -18,6 +18,7 @@ from .serializers import (TransactsSerializer,
                           UserSerializer,
                           UserCreatorSerializer,
                           UserNestedSerializer,
+                          InvitationCodesSerializer,
                           AuthenticationSerializer,
                           GroupsSerializer)
 
@@ -360,6 +361,7 @@ class TransactsView(viewsets.ModelViewSet):
         return JsonResponse(dicc, status=200, safe=False)
 
 class GroupsView(viewsets.ModelViewSet):
+
     queryset = Group.objects.all()
     serializer_class = GroupsSerializer
 
@@ -368,3 +370,14 @@ class GroupsView(viewsets.ModelViewSet):
         serializer = GroupsSerializer(groups, many=True)
         print(serializer.data)
         return JsonResponse(serializer.data, status=200, safe=False)
+
+class InvitationCodeView(viewsets.ModelViewSet):
+    serializer_class = InvitationCodesSerializer
+    authentication_classes = [IsAuthenticated]
+
+    def post_invitation_code(self, request):
+        invitation = InvitationCodesSerializer(data=request.data)
+        if invitation.is_valid():
+            values = invitation.save()
+            return JsonResponse(values.data, status=201)
+        return JsonResponse({"success":False},status=400)
