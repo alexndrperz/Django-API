@@ -14,6 +14,7 @@ from .serializers import (TransactsSerializer,
                           ProductSerializer,
                           ProductCreatorSerializer,
                           UserSerializer,
+                          UserCreatorSerializer,
                           UserNestedSerializer,
                           AuthenticationSerializer,
                           GroupsSerializer)
@@ -38,9 +39,9 @@ def format_data(data=None, nameClass=None, code=200):
         }
     return result
 
-def validate_credentials(request,groups,entity,userProperty=None,is_one_item=False, is_limited=False):
+def validate_credentials(request,userProperty=None,groups=[],is_one_item=False, is_limited=False):
     if request.user.is_authenticated ==  False:
-       return {'success':False,'status':401}
+       return {'success':False,'status':401, 'message':'No esta autorizado'}
     validator = validate_group(request.user, ['administrator','sellers', 'checkers','buyers'])
     if validator == False and request.user.is_superuser == False:
         return {'success':False,'status':403}
@@ -70,8 +71,8 @@ class ProductView(viewsets.ModelViewSet):
     def nested_list_products(self, request):
         validCred = validate_credentials(request)
         print(validCred )
-        if request.user.is_authenticated ==  False:
-            return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
+        if validCred['success'] == False:
+            return JsonResponse({'message':validCred['message']}, status=validCred['status'])
         validator = validate_group(request.user, ['administrator','sellers', 'checkers'])
         if validator == False and request.user.is_superuser == False:
             return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
@@ -285,27 +286,21 @@ class UserView(viewsets.ModelViewSet):
     #POST new User
     def post_user(self, request, *args, **kwargs):
         try:
-            group_name= request.data.pop('groups', None)
-            print(group_name)
- 
-            group= Group.objects.get(name=group_name)
-            serializer = self.get_serializer(data=request.data)
+            serializer = UserCreatorSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             user = serializer.save()
-            user.groups.add(group)
-            finaldicc = serializer.data
-            finaldicc['groups'] = group_name
-            
-            header = self.get_success_headers(serializer.data)
-            return JsonResponse(finaldicc, status=200, headers=header)
+            serializerRep = UserSerializer(user)
+            print(serializerRep.data)
+
+            return JsonResponse(serializerRep.data, status=200)
         except exceptions.ValidationError as e:
             return JsonResponse({'message': e.detail, 'status':400}, status=400)
         except (exceptions.UnsupportedMediaType, exceptions.ParseError) as e:
             return JsonResponse({'message':'El formato de su request no es valido', 'status':400}, status=400)
-        # except Exception as e:
-        #     print(e)
-        #     print(type(e))
-        #     return JsonResponse({'message':'Hubo un error en el servidor', 'status':500}, status=500)
+        except Exception as e:
+            print(e)
+            print(type(e))
+            return JsonResponse({'message':'Hubo un error en el servidor', 'status':500}, status=500)
 
     # GET one User
     def get_user(self, request, *args, **kwargs):

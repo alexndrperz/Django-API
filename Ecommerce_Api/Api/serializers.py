@@ -1,5 +1,6 @@
+from django.forms import ValidationError
 from rest_framework import serializers
-from .models import Category, Product,Transacts
+from .models import Category, Product,Transacts,User
 from django.contrib.auth import get_user_model, authenticate
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Group
@@ -26,17 +27,51 @@ class GroupsSerializer(serializers.Serializer):
 
 class UserSerializer(serializers.ModelSerializer):
     group = serializers.SerializerMethodField()
-    def create(self, validated_data):
-        validated_data['password'] = make_password(validated_data['password'])
-        print(validated_data)
-        return super().create(validated_data)
+    last_login = serializers.DateTimeField(format="%m/%d/%Y %I:%M:%S %p")
+    
     class Meta:
         model = get_user_model() 
         extra_kwargs = {'password':{'write_only':True}}
-        fields = ['id','email','password','name','is_active','group']
-    def get_group(self, obj):
-        return list(obj.groups.values_list('name',flat=True))
+        fields = ['id','email','password','name','is_active','group', 'last_login']
 
+ 
+    def get_group(self, obj):
+        print(obj)
+        return list(obj.groups.values_list('name',flat=True))
+    
+
+
+
+class UserCreatorSerializer(serializers.ModelSerializer):
+    group_names = serializers.ListField(child=serializers.CharField())
+
+    class Meta:
+        model = get_user_model() 
+        fields = ['id','email','password','name','is_active','group_names']
+        extra_kwargs = {'password': {'write_only': True}}
+
+    def create(self, validated_data):
+        group_name = validated_data.pop('group_names', [])
+        validated_data['password'] = make_password(validated_data['password'])
+        not_found_groups = []
+        groups = []
+
+        for group_n in group_name:
+            try:
+                group = Group.objects.get(name=group_n)
+                groups.append(group)
+            except Group.DoesNotExist:
+                not_found_groups.append(group_n)
+
+        if not_found_groups:
+            message = f"Groups {', '.join(not_found_groups)} not found"
+            raise serializers.ValidationError(message, code=400)
+
+
+        user = User.objects.create_user(**validated_data)
+        for group in groups:
+            user.groups.add(group)
+        return user
 
 class UserNestedSerializer(serializers.ModelSerializer):
     group= serializers.SerializerMethodField()
@@ -146,11 +181,14 @@ class AuthenticationSerializer(serializers.Serializer):
     def validate(self, data):
         email = data.get('email')
         password = data.get('password')
+        print(email)
+        print(password)
         user = authenticate(
             request= self.context.get('request'),
-            username=email,
+            email=email,
             password = password
         )  
+        print(user)
 
         if not user:
             raise serializers.ValidationError('Pa fuera jakel', code='authorization')
