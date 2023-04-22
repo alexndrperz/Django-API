@@ -35,6 +35,13 @@ ALLOWED_HOSTS = []
 
 # JWT_EXPIRATION_DELTA = datetime.timedelta(minutes=1)
 
+# JWT_AUTH = {
+#     'JWT_DECODE_HANDLER': 'myproject.utils.jwt_decode_handler',
+#     'JWT_PAYLOAD_HANDLER': 'myproject.utils.jwt_payload_handler',
+# }
+
+
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -146,3 +153,8 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'Api.User'
+
+AUTHENTICATION_BACKENDS = [
+    'Api.backends.CustomBackend',
+    'django.contrib.auth.backends.ModelBackend'
+]

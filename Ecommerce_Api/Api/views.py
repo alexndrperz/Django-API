@@ -5,8 +5,10 @@ from rest_framework.permissions import IsAuthenticated
 from django.http.response import JsonResponse 
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.views import  ObtainAuthToken
+from rest_framework.authtoken.models import  Token
 from django.contrib.auth.models import Group
 from django.core import serializers
+from rest_framework.views import APIView
 from .models import Product,Category,Transacts,User
 from .serializers import (TransactsSerializer, 
                           CategorySerializer,
@@ -323,6 +325,17 @@ class UserView(viewsets.ModelViewSet):
         except Exception as e:
             print(e)
             return JsonResponse({'message':'error en el server', 'status':500}, status=500)
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, *args, **kwargs):
+        dataAuth = request.headers.get('Authorization')
+        token = dataAuth.split(' ')[1]
+        token1 = Token.objects.filter(key=token).first()
+        print(type(token1))
+        token1.delete()
+        return JsonResponse({'message':'Token Borrado Exitosamente'}, status=200)
     
 class AuthenticationView(ObtainAuthToken):
     serializer_class = AuthenticationSerializer

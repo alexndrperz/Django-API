@@ -27,7 +27,7 @@ class GroupsSerializer(serializers.Serializer):
 
 class UserSerializer(serializers.ModelSerializer):
     group = serializers.SerializerMethodField()
-    last_login = serializers.DateTimeField(format="%m/%d/%Y %I:%M:%S %p")
+    last_login = serializers.DateTimeField(format="%d/%m/%Y %I:%M:%S %p")
     
     class Meta:
         model = get_user_model() 
@@ -181,17 +181,14 @@ class AuthenticationSerializer(serializers.Serializer):
     def validate(self, data):
         email = data.get('email')
         password = data.get('password')
-        print(email)
-        print(password)
         user = authenticate(
             request= self.context.get('request'),
             email=email,
             password = password
         )  
-        print(user)
 
         if not user:
-            raise serializers.ValidationError('Pa fuera jakel', code='authorization')
+            raise serializers.ValidationError('Sus credenciales han sido incorrectas', code=401)
 
         data['user'] = user 
         return data
