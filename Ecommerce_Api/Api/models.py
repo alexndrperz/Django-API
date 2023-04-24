@@ -6,10 +6,9 @@ from django.contrib.auth.models import (
     BaseUserManager,
     Group
 )
-
+from .utils import services as uti
 from django.utils.timezone import now, timedelta 
 
-print(now())
 
 class UserManager(BaseUserManager):
     def create_user(self,email, password, **args):
@@ -60,15 +59,15 @@ class Transacts(models.Model):
     buyers = models.ForeignKey(User, on_delete=models.CASCADE, default=1)
 
 class InvitationCodes(models.Model):
-    invitationCodes = models.CharField(max_length=8)
-    description = models.CharField(max_length=50)
+    invitationCodes = models.CharField(max_length=15,default=uti.generate_invitation_code(), unique=True)
+    description = models.CharField(max_length=50, blank=True)
     is_used = models.BooleanField(default=False)
     is_expired = models.BooleanField(default=False)
-    realeased_date = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     expire_date = models.DateTimeField(default=now() + timedelta(days=7))
     
     def save(self, *args, **kwargs):
-        if self.expire_date < timezone.now():
+        if self.expire_date < now():
             self.is_expired = True
         super().save(*args, **kwargs)
 

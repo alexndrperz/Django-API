@@ -3,13 +3,14 @@ from django.http import response
 from rest_framework import viewsets,permissions, authentication,mixins, exceptions
 from rest_framework.permissions import IsAuthenticated
 from django.http.response import JsonResponse 
+from .authentications import IsAdmin
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.views import  ObtainAuthToken
 from rest_framework.authtoken.models import  Token
 from django.contrib.auth.models import Group
 from django.core import serializers
 from rest_framework.views import APIView
-from .models import Product,Category,Transacts,User
+from .models import Product,Category,Transacts,User,InvitationCodes
 from .serializers import (TransactsSerializer, 
                           CategorySerializer,
                           CategoryWithoutProductsSerializer, 
@@ -372,12 +373,21 @@ class GroupsView(viewsets.ModelViewSet):
         return JsonResponse(serializer.data, status=200, safe=False)
 
 class InvitationCodeView(viewsets.ModelViewSet):
+    queryset = InvitationCodes.objects.all()
     serializer_class = InvitationCodesSerializer
-    authentication_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated,IsAdmin]
+
+    def get_invitation_codes(self, request):
+        invCodes = InvitationCodes.objects.all()
+        result = InvitationCodesSerializer(invCodes, many=True).data
+        print(result)
+        return JsonResponse(result, status = 200, safe=False)
 
     def post_invitation_code(self, request):
         invitation = InvitationCodesSerializer(data=request.data)
-        if invitation.is_valid():
+        if invitation.is_valid(raise_exception=True):
             values = invitation.save()
-            return JsonResponse(values.data, status=201)
+            result = InvitationCodesSerializer(values).data
+            return JsonResponse(result, status=201)
         return JsonResponse({"success":False},status=400)
+

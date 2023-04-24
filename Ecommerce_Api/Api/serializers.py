@@ -1,13 +1,14 @@
 from django.forms import ValidationError
-from rest_framework import serializers
+from rest_framework import serializers,exceptions
 from .models import Category, Product,Transacts,User,InvitationCodes
 from django.contrib.auth import get_user_model, authenticate
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Group
-import utils as uti
+from .utils import services as uti
 import random
 import string
 
+dateFormat = serializers.DateTimeField(format="%d/%m/%Y %I:%M:%S %p",required=False)
 
 class GroupsSerializer(serializers.Serializer): 
 
@@ -41,47 +42,59 @@ class UserSerializer(serializers.ModelSerializer):
     def get_group(self, obj):
         print(obj)
         return list(obj.groups.values_list('name',flat=True))
+
+
     
 class InvitationCodesSerializer(serializers.ModelSerializer):
+    expire_date = dateFormat
+    created_at = serializers.DateTimeField(format="%d/%m/%Y %I:%M:%S %p",required=False)
     class Meta:
         model = InvitationCodes
-        fields=['invitationCodes','description','is_used','realeased_date','expire_date']
-
-    def create(self, validated_data):
-        validated_data['InvitationCodes'] = uti.generate_invitation_code(8)
-        dictObj = InvitationCodes.objects.create(**validated_data)
-        dictObj.save()
-        return dictObj
+        fields=['invitationCodes','description','is_used','is_expired','created_at','expire_date']
 
 class UserCreatorSerializer(serializers.ModelSerializer):
-    group_names = serializers.ListField(child=serializers.CharField())
-
+    group_names = serializers.ListField(child=serializers.CharField(), required=False)
+    invitation_code = serializers.CharField()
     class Meta:
         model = get_user_model() 
-        fields = ['id','email','password','name','is_active','group_names']
+        fields = ['id','email','password','name','is_active','group_names', 'invitation_code']
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
-        group_name = validated_data.pop('group_names', [])
+        group_name = validated_data.pop('group_names', None)
+        invitation_code = validated_data.pop('invitation_code',None)
+        try:
+            if invitation_code:
+                print("ss")
+                invitationObj = InvitationCodes.objects.get(invitationCodes=invitation_code)    
+                print(invitationObj)
+                serializer = InvitationCodesSerializer(instance=invitationObj, data={'is_used':True})
+                if serializer.is_valid():
+                    serializer.save()
+                    print("as")
+        except:
+            raise exceptions.ValidationError("No se ha encontrado su codigo de invitacion")
+            
         validated_data['password'] = make_password(validated_data['password'])
         not_found_groups = []
         groups = []
+        if group_name: 
+            for group_n in group_name:
+                try:
+                    group = Group.objects.get(name=group_n)
+                    groups.append(group)
+                except Group.DoesNotExist:
+                    not_found_groups.append(group_n)
 
-        for group_n in group_name:
-            try:
-                group = Group.objects.get(name=group_n)
-                groups.append(group)
-            except Group.DoesNotExist:
-                not_found_groups.append(group_n)
-
-        if not_found_groups:
-            message = f"Groups {', '.join(not_found_groups)} not found"
-            raise serializers.ValidationError(message, code=400)
+            if not_found_groups:
+                message = f"Groups {', '.join(not_found_groups)} not found"
+                raise serializers.ValidationError(message, code=400)
 
 
+            user = User.objects.create_user(**validated_data)
+            for group in groups:
+                user.groups.add(group)
         user = User.objects.create_user(**validated_data)
-        for group in groups:
-            user.groups.add(group)
         return user
 
 class UserNestedSerializer(serializers.ModelSerializer):

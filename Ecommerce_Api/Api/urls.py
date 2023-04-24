@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import ProductView, CategoryView,TransactsView,UserView, AuthenticationView, GroupsView, LogoutView
+from .views import ProductView, CategoryView,TransactsView,UserView, AuthenticationView, GroupsView, LogoutView, InvitationCodeView
 
 urlpatterns = [
     path('productos',ProductView.as_view({'get':'nested_list_products','post':'post_product'}), name='listOfProducts' ),
@@ -13,4 +13,5 @@ urlpatterns = [
     path('users/logout',LogoutView.as_view(), name='logout'),
     path('users/<int:pk>', UserView.as_view({'get':'get_user','delete':'delete_user'})),
     path('transacts/',TransactsView.as_view({'get':'get_all_transacts'}), name='listOfTransacts'),
+    path('users/invitations', InvitationCodeView.as_view({'get':'get_invitation_codes','post':'post_invitation_code'}), name='invitation')
 ]
