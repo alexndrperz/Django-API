@@ -35,8 +35,15 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     registro = models.DateTimeField(auto_now_add=True)
     USERNAME_FIELD = 'email'
-
     objects = UserManager()
+
+    @property
+    def purchases_count(self):
+        return self.transacts_set.count()
+
+    @property
+    def shares_count(self):
+        return self.product_set.count()
 
 class Category(models.Model):
     nameCategory = models.CharField(max_length=50)
@@ -50,8 +57,8 @@ class Product(models.Model):
     dateReleased = models.DateField(auto_now_add=True)
     active = models.BooleanField(default=False)
     is_digital = models.BooleanField(default=False)
-    seller_id = models.ForeignKey(User, on_delete=models.CASCADE)
-    category_id = models.ForeignKey(Category, on_delete=models.CASCADE)
+    seller = models.ForeignKey(User, on_delete=models.CASCADE)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE)
 
 class Transacts(models.Model):
     dateTransact = models.DateTimeField(auto_now_add=True)

@@ -3,11 +3,13 @@ from django.http import response
 from rest_framework import viewsets,permissions, authentication,mixins, exceptions
 from rest_framework.permissions import IsAuthenticated
 from django.http.response import JsonResponse 
-from .authentications import IsAdmin
+from .authentications import IsAdmin, IsSeller, IsChecker, IsBuyer, IsGroupAccepted
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.views import  ObtainAuthToken
 from rest_framework.authtoken.models import  Token
 from django.contrib.auth.models import Group
+from django.db.models import Q
+from datetime import datetime, timedelta
 from django.core import serializers
 from rest_framework.views import APIView
 from .models import Product,Category,Transacts,User,InvitationCodes
@@ -43,6 +45,17 @@ def format_data(data=None, nameClass=None, code=200):
         }
     return result
 
+def hasOrNotPermission(clss, request, view,obj=None,authClass=None, oneObj=False):
+    if authClass != None:
+        if oneObj== False:
+            userComp = True if authClass.has_permission(clss, request, view) else False
+
+        else:
+            userComp = True if authClass.has_object_permission(clss, request,view,obj) else False
+    return userComp
+
+
+
 def validate_credentials(request,userProperty=None,groups=[],is_one_item=False, is_limited=False):
     if request.user.is_authenticated ==  False:
        return {'success':False,'status':401, 'message':'No esta autorizado'}
@@ -70,48 +83,49 @@ class ProductView(viewsets.ModelViewSet):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     authentication_classes = [authentication.TokenAuthentication]
+    permission_classes = [IsAuthenticated,IsGroupAccepted]
 
     # GET all Products (with restrictions for sellers)
     def nested_list_products(self, request):
-        validCred = validate_credentials(request)
-        print(validCred )
-        if validCred['success'] == False:
-            return JsonResponse({'message':validCred['message']}, status=validCred['status'])
-        validator = validate_group(request.user, ['administrator','sellers', 'checkers'])
-        if validator == False and request.user.is_superuser == False:
-            return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
-        if validate_group(request.user, ['sellers']):
-            products = Product.objects.filter(seller_id=request.user.id)
-            serializer= ProductSerializer(products, many=True)   
+        user_products= request.GET.get('userProducts','false')
+        if user_products == 'true':
+            products = Product.objects.filter(seller_id=request.user.id, active=True)
+            print("filtrado")
+        elif user_products == 'false':
+            products = Product.objects.all()
+        else:
+            return JsonResponse({"Message":"Not Found"}, status=400)
+        serializer= ProductSerializer(products, many=True)
         return JsonResponse(serializer.data, status=200,safe=False)
     
     # GET just one product (Also with restricctions)
     def get_product(self, request, *args, **kwargs):
-        try:
-            if request.user.is_authenticated ==  False:
-                return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
-            validator = validate_group(request.user, ['administrator','sellers', 'checkers'])
-            instance = self.get_object()
-            if validator == False and request.user.is_superuser == False:
-                return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
-            if validate_group(request.user, ['sellers']):
-                if instance.seller_id.id != request.user.id:
-                    return JsonResponse({'success':False, 'message':'No ha vendido este producto'}, status=404)
-            serializer = self.get_serializer(instance)
-            return JsonResponse(serializer.data,status=200)
-        except Exception as e:
-            return JsonResponse({}, status=500)
+        instance = self.get_object()
+        permission = hasOrNotPermission(self, request, self.__class__,obj=instance,oneObj=True,authClass=IsSeller)
+        if not permission: 
+            return JsonResponse({'success':False, 'message':'No ha vendido este producto'}, status=404)
+        
+        serializer = self.get_serializer(instance)
+        return JsonResponse(serializer.data,status=200)
     
     # GET Digital Products (Checkers)
     def get_digital_products(self, request):
-        if request.user.is_authenticated ==  False:
-                return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
-        validator = validate_group(request.user, ['administrator', 'checkers'])
-        if validator == False and request.user.is_superuser == False:
-            return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
-        products = Product.objects.filter(is_digital=True)
-        serializer = ProductSerializer(products, many=True)
-        return JsonResponse(serializer.data, status=200, safe=False)
+        checkersComp = hasOrNotPermission(self,request, self.__class__,authClass=IsChecker)
+        adminsComp = hasOrNotPermission(self,request, self.__class__, authClass=IsAdmin)
+        if checkersComp or adminsComp:
+            products = Product.objects.filter(is_digital=True)
+            serializer = ProductSerializer(products, many=True)
+            return JsonResponse(serializer.data, status=200, safe=False)
+        else: 
+            return JsonResponse({"message":"No tienes permiso"}, status=401)
+    
+    # GET Last Products
+    def get_last_products(self, request):
+        now = datetime.now()
+        start_time= now-timedelta(hours=24)
+        products = Product.objects.filter(Q(dateReleased__gte=start_time))
+        print(products)
+        return 
 
     # POST a new product (Taking Seller id)
     def post_product(self,request):
@@ -293,9 +307,7 @@ class UserView(viewsets.ModelViewSet):
             serializer = UserCreatorSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             user = serializer.save()
-            serializerRep = UserSerializer(user)
-            print(serializerRep.data)
-
+            serializerRep = UserSerializer(user)   
             return JsonResponse(serializerRep.data, status=200)
         except exceptions.ValidationError as e:
             return JsonResponse({'message': e.detail, 'status':400}, status=400)
@@ -345,21 +357,33 @@ class AuthenticationView(ObtainAuthToken):
 class TransactsView(viewsets.ModelViewSet):
     queryset = Transacts.objects.all()
     serializer_class = TransactsSerializer
+    permission_classes = [IsAuthenticated, IsGroupAccepted]
 
     def get_all_transacts(self, request):
-        if request.user.is_authenticated ==  False:
-            return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
-        validator = validate_group(request.user, ['administrator','sellers', 'checkers','buyers'])
-        if validator == False and request.user.is_superuser == False:
-            return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
-        else:
-            val = validate_group(request.user, ['sellers','buyers'])
-        if validate_group(request.user, ['buyers']):
+        sellerComp = True if IsSeller.has_permission(self, request, self.__class__) else False
+        buyerComp = True if IsBuyer.has_permission(self, request, self.__class__) else False
+        if sellerComp == True or buyerComp == True:
             transacts = Transacts.objects.filter(buyers_id=request.user.id)
-            serializer= TransactsSerializer(transacts, many=True)   
-            dicc = serializer.data
-               
+        else:
+            transacts = Transacts.objects.all()
+        serializer= TransactsSerializer(transacts, many=True)   
+        dicc = serializer.data
         return JsonResponse(dicc, status=200, safe=False)
+
+    def post_transact(self, request):
+        serializer = TransactsSerializer(data=request.data, context={'request':request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return JsonResponse(serializer.data, status=201)
+
+    def delete_transact(self, request, *args, **kwargs):
+        transact = self.get_object()
+        buyerComp = True if IsBuyer.has_object_permission(self, request, self.__class__, transact) else False
+        if buyerComp == True:
+            self.perform_destroy(transact)
+            return JsonResponse({'message':'Transaccion eliminada exitosamente'},status=204)
+        else:
+            return JsonResponse({'message':'No tiene acceso a esta'},status=404)
 
 class GroupsView(viewsets.ModelViewSet):
 

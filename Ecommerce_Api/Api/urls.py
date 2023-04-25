@@ -12,6 +12,7 @@ urlpatterns = [
     path('users/authenticate',AuthenticationView.as_view(), name='Get_token'),
     path('users/logout',LogoutView.as_view(), name='logout'),
     path('users/<int:pk>', UserView.as_view({'get':'get_user','delete':'delete_user'})),
-    path('transacts/',TransactsView.as_view({'get':'get_all_transacts'}), name='listOfTransacts'),
+    path('transacts',TransactsView.as_view({'get':'get_all_transacts','post':'post_transact'}), name='listOfTransacts'),
+    path('transacts/<int:pk>',TransactsView.as_view({'delete':'delete_transact'}), name='individual_transact'),
     path('users/invitations', InvitationCodeView.as_view({'get':'get_invitation_codes','post':'post_invitation_code'}), name='invitation')
 ]

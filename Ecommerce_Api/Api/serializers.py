@@ -32,11 +32,19 @@ class GroupsSerializer(serializers.Serializer):
 class UserSerializer(serializers.ModelSerializer):
     group = serializers.SerializerMethodField()
     last_login = serializers.DateTimeField(format="%d/%m/%Y %I:%M:%S %p")
+    shares_count = serializers.SerializerMethodField()
+    purchases_count = serializers.SerializerMethodField()
     
     class Meta:
         model = get_user_model() 
         extra_kwargs = {'password':{'write_only':True}}
-        fields = ['id','email','password','name','is_active','group', 'last_login']
+        fields = ['id','email','password','name','is_active','group', 'last_login', 'shares_count', 'purchases_count']
+
+    def get_shares_count(self, obj):
+        return obj.shares_count
+
+    def get_purchases_count(self, obj):
+        return obj.purchases_count
 
  
     def get_group(self, obj):
@@ -53,7 +61,7 @@ class InvitationCodesSerializer(serializers.ModelSerializer):
         fields=['invitationCodes','description','is_used','is_expired','created_at','expire_date']
 
 class UserCreatorSerializer(serializers.ModelSerializer):
-    group_names = serializers.ListField(child=serializers.CharField(), required=False)
+    group_names = serializers.ListField(child=serializers.CharField(), read_only=True)
     invitation_code = serializers.CharField()
     class Meta:
         model = get_user_model() 
@@ -61,20 +69,22 @@ class UserCreatorSerializer(serializers.ModelSerializer):
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
-        group_name = validated_data.pop('group_names', None)
+        group_name = validated_data.pop('group_names', ["buyers"])
         invitation_code = validated_data.pop('invitation_code',None)
+        message = ""
         try:
             if invitation_code:
-                print("ss")
-                invitationObj = InvitationCodes.objects.get(invitationCodes=invitation_code)    
-                print(invitationObj)
-                serializer = InvitationCodesSerializer(instance=invitationObj, data={'is_used':True})
-                if serializer.is_valid():
-                    serializer.save()
-                    print("as")
+                invitationObj = InvitationCodes.objects.get(invitationCodes=invitation_code)
         except:
-            raise exceptions.ValidationError("No se ha encontrado su codigo de invitacion")
-            
+            message = "No se ha encontrado su codigo de invitacion"
+            raise exceptions.ValidationError(message)    
+        if invitationObj.is_used == False and invitationObj.is_expired == False:
+            serializer = InvitationCodesSerializer(instance=invitationObj, data={'is_used':True})
+            if serializer.is_valid():
+                serializer.save()
+        else:
+            message = "Code de invitacion previamente usado o expirado"
+            raise exceptions.ValidationError(message)
         validated_data['password'] = make_password(validated_data['password'])
         not_found_groups = []
         groups = []
@@ -90,11 +100,9 @@ class UserCreatorSerializer(serializers.ModelSerializer):
                 message = f"Groups {', '.join(not_found_groups)} not found"
                 raise serializers.ValidationError(message, code=400)
 
-
             user = User.objects.create_user(**validated_data)
             for group in groups:
                 user.groups.add(group)
-        user = User.objects.create_user(**validated_data)
         return user
 
 class UserNestedSerializer(serializers.ModelSerializer):
@@ -144,12 +152,12 @@ class CategoryNestedSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    category  = CategoryNestedSerializer(source="category_id")
-    seller = UserNestedSerializer(source="seller_id")
+    seller = UserNestedSerializer()
+    category = CategoryNestedSerializer()
 
     class Meta:
         model = Product
-        fields = ['id','nameProduct','priceProduct','dateReleased','is_digital','active','category','seller']
+        fields = ['id','nameProduct','priceProduct','dateReleased','is_digital','active','seller', 'category']
 
 class ProductCreatorSerializer(serializers.ModelSerializer):
     seller_id = serializers.ReadOnlyField()
@@ -185,13 +193,25 @@ class TransactProductNestedSerializer(serializers.ModelSerializer):
         fields = ['id','nameProduct','priceProduct','dateReleased','active', 'seller']
 
 class TransactsSerializer(serializers.ModelSerializer):
-    product = TransactProductNestedSerializer()
-    buyers = UserNestedSerializer()
-    dateTransact = serializers.DateTimeField(format="%m/%d/%Y %I:%M:%S %p")
+    product_id = serializers.IntegerField(write_only=True)
+    product = TransactProductNestedSerializer(read_only=True)
+    buyers = UserNestedSerializer(read_only=True)
+    dateTransact = serializers.DateTimeField(format="%m/%d/%Y %I:%M:%S %p", read_only=True)
     
     class Meta:
         model  = Transacts 
-        fields = ['id','dateTransact','product','buyers']
+        fields = ['id','dateTransact','product','buyers', 'product_id']
+
+    def create(self, validated_data):
+        print(validated_data)
+        product_id = validated_data.pop('product_id', None)
+        request = self.context.get('request')
+        buyer_id= request.user.id
+        buyers = User.objects.get(id=buyer_id)
+        print(buyers)
+        products = Product.objects.get(id=product_id)
+        transact = Transacts.objects.create(product=products,buyers=buyers, **validated_data)
+        return transact
 
 
 
