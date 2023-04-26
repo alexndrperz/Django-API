@@ -77,33 +77,39 @@ class UserCreatorSerializer(serializers.ModelSerializer):
                 invitationObj = InvitationCodes.objects.get(invitationCodes=invitation_code)
         except:
             message = "No se ha encontrado su codigo de invitacion"
-            raise exceptions.ValidationError(message)    
+            raise serializer.ValidationError({"message":message})    
         if invitationObj.is_used == False and invitationObj.is_expired == False:
             serializer = InvitationCodesSerializer(instance=invitationObj, data={'is_used':True})
             if serializer.is_valid():
                 serializer.save()
         else:
             message = "Code de invitacion previamente usado o expirado"
-            raise exceptions.ValidationError(message)
+            raise serializers.ValidationError({"message":message})
+        group = Group.objects.get(name=group_name[0]) 
         validated_data['password'] = make_password(validated_data['password'])
-        not_found_groups = []
-        groups = []
-        if group_name: 
-            for group_n in group_name:
-                try:
-                    group = Group.objects.get(name=group_n)
-                    groups.append(group)
-                except Group.DoesNotExist:
-                    not_found_groups.append(group_n)
-
-            if not_found_groups:
-                message = f"Groups {', '.join(not_found_groups)} not found"
-                raise serializers.ValidationError(message, code=400)
-
-            user = User.objects.create_user(**validated_data)
-            for group in groups:
-                user.groups.add(group)
+        user = User.objects.create_user(**validated_data)
+        user.groups.add(group)
         return user
+
+
+        # not_found_groups = []
+        # groups = []
+        # if group_name: 
+        #     for group_n in group_name:
+        #         try:
+        #             group = Group.objects.get(name=group_n)
+        #             groups.append(group)
+        #         except Group.DoesNotExist:
+        #             not_found_groups.append(group_n)
+
+        #     if not_found_groups:
+        #         message = f"Groups {', '.join(not_found_groups)} not found"
+        #         raise serializers.ValidationError(message, code=400)
+        #     validated_data['password'] = make_password(validated_data['password'])
+        #     user = User.objects.create_user(**validated_data)
+        #     for group in groups:
+        #         user.groups.add(group)
+        # return user
 
 class UserNestedSerializer(serializers.ModelSerializer):
     group= serializers.SerializerMethodField()
@@ -132,7 +138,7 @@ class CategorySerializer(serializers.ModelSerializer):
         if obj.products_quantity == 0:
             products = "N/A"
             return products
-        products = Product.objects.filter(category_id=obj.id)
+        products = Product.objects.filter(category_id=obj.id, active=True)
         return ProductSerializer(products, many=True).data
 
 class CategoryWithoutProductsSerializer(serializers.ModelSerializer):
@@ -155,34 +161,69 @@ class ProductSerializer(serializers.ModelSerializer):
     seller = UserNestedSerializer(read_only=True)
     category = CategoryNestedSerializer(read_only=True)
     category_id = serializers.IntegerField(required=True, write_only=True)
+    price = serializers.SerializerMethodField()
+    priceProduct = serializers.DecimalField(max_digits=10,decimal_places=2,write_only=True)
+
+    def get_price(self, obj):
+        print(obj.priceProduct)
+        return f"{obj.priceProduct} USD"
 
     class Meta:
         model = Product
         fields = [
                     'id',
                     'nameProduct',
-                    'priceProduct',
+                    'price',
                     'dateReleased',
                     'is_digital',
                     'active',
                     'seller', 
                     'category',
-                    'category_id'
+                    'category_id',
+                    'priceProduct'
                 ]
+
 
     def create(self, validated_data):
         request = self.context.get('request')
-        print(validated_data)
         category_id = validated_data.pop('category_id', None)
+        price = validated_data.pop('priceProduct', None)
         validated_data.pop('seller_id')
+        print("asdas")
         seller = User.objects.get(id=request.user.id)
-        print(seller.id)
         try:
             category = Category.objects.get(id=category_id)
         except:
             raise exceptions.ValidationError("La categoria especificada no existe")
-        product = Product.objects.create(seller=seller, category=category, **validated_data)
+        product = Product.objects.create(seller=seller, priceProduct=price, category=category, **validated_data)
         return product
+
+    def update(self, instance, validated_data):
+        userValidation= self.context.get('userPermision')
+        if userValidation['IsChecker'] and not userValidation['IsAdmin'] and any( key != 'active' for key in validated_data.keys()):
+            raise serializers.ValidationError({"message":"No puede editar esto"}) 
+        return super().update(instance, validated_data)
+
+    def to_internal_value(self, data):
+            valid_fields = set(self.fields.keys())
+            input_fields = set(data.keys())
+            userValidation= self.context.get('userPermision') 
+            print(valid_fields)
+            print(input_fields)
+            
+            if 'id' in data:
+                raise serializers.ValidationError({"Parametro no autorizado":['id']})
+
+            if userValidation['IsSeller'] and not userValidation['IsChecker'] and not userValidation['IsAdmin'] and 'active' in input_fields:
+                raise serializers.ValidationError({'message': 'No es checker'})
+            
+            if not input_fields.issubset(valid_fields):
+                invalid_fields = input_fields - valid_fields
+                INVList = list(invalid_fields)
+                print(INVList)
+                raise serializers.ValidationError({"Parametros Invalidos":INVList})
+            return super().to_internal_value(data)
+
 
 
 # class SellerSerializer(serializers.ModelSerializer):

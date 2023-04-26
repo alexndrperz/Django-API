@@ -2,14 +2,16 @@ from django.views import View
 from django.http import response
 from rest_framework import viewsets,permissions, authentication,mixins, exceptions
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import permission_classes
 from django.http.response import JsonResponse 
-from .authentications import IsAdmin, IsSeller, IsChecker, IsBuyer, IsGroupAccepted
+from .authentications import IsAdmin, IsSeller, IsChecker, IsBuyer, IsGroupAccepted, AllowAny
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.views import  ObtainAuthToken
 from rest_framework.authtoken.models import  Token
 from django.contrib.auth.models import Group
 from django.db.models import Q
 from datetime import datetime, timedelta
+from .utils import services as uti
 from django.core import serializers
 from rest_framework.views import APIView
 from .models import Product,Category,Transacts,User,InvitationCodes
@@ -117,10 +119,12 @@ class ProductView(viewsets.ModelViewSet):
         sellerPermision = hasOrNotPermission(self, request,self.__class__, authClass=IsSeller)
         checkerPermision = hasOrNotPermission(self, request,self.__class__, authClass=IsChecker)
         buyerPermsision = hasOrNotPermission(self, request,self.__class__, authClass=IsBuyer)
-        
-        if not sellerPermision and checkerPermision or buyerPermsision:
+        userPerm = uti.hasOrNotPermission(self, request,self.__class__, authClass=[IsSeller,IsChecker,IsBuyer,IsAdmin])
+        print(userPerm)
+        print(request.data)
+        if not userPerm["IsSeller"] and not userPerm["IsAdmin"]:
             return JsonResponse({"message":"No tiene permiso para realizar esta accion"}, status=403)
-        serializer = ProductSerializer(data=request.data, context={'request':request})
+        serializer = ProductSerializer(data=request.data, context={'request':request, 'userPermision':userPerm})
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         self.get_success_headers(serializer.data)
@@ -128,206 +132,136 @@ class ProductView(viewsets.ModelViewSet):
  
     # PUT a product created by a seller
     def update_product(self, request,*args, **kwargs):
-        try:
-            instance = self.get_object()
-            if request.user.is_authenticated ==  False:
-                return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
-            validator = validate_group(request.user, ['administrator','sellers', 'checkers'])
-            if validator == False and request.user.is_superuser == False:
-                return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
-            if validate_group(request.user, ['sellers']):
-                if instance.seller_id.id != request.user.id:
-                    return JsonResponse({'success':False, 'message':'No ha vendido este producto'}, status=404)
-            
-            serializer = self.get_serializer(instance,data=request.data, partial=True)
-            serializer.is_valid(raise_exception=True)
-            fields = list(serializer.get_fields().keys())
-            for key in request.data.keys():
-                if key not in fields:
-                    print(f"{key} no existe")
-                    raise exceptions.ValidationError
-        except response.Http404:
-            return JsonResponse({'message':'No se encuentra el producto', 'status':404}, status=404)
-        except exceptions.UnsupportedMediaType as e:
-            return JsonResponse({'message':'El formato de su request no es valido', 'status':400}, status=400)
-        except exceptions.ValidationError as e:
-            return JsonResponse({'message':'Ha dejado uno o mas campos requeridos vacios', 'status':400}, status=400)
-        except Exception as e:
-            print(e)
-            dicc = format_data(code=500)
-            return JsonResponse(dicc, status=dicc['status'])
+        instance = self.get_object()
+        userPerm = uti.hasOrNotPermission(self, request,self.__class__, authClass=[IsSeller,IsAdmin,IsChecker,IsBuyer],oneObj=True, obj=instance)
+        print(userPerm)
+        if not any(val is True for val in userPerm.values() if val != "IsSeller" or "IsBuyer"):  
+            return JsonResponse({'success':False, 'message':'No ha vendido este producto'}, status=404)
+        serializer = self.get_serializer(instance,data=request.data, partial=True, context={'userPermision':userPerm})
+        serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
-        return JsonResponse({'message':'El campo ha sido actualizado', 'status':200}, status=200)
+        return JsonResponse({'message':'El campo ha sido actualizado','result':serializer.data, 'status':200}, status=200)
 
     # DELETE Product (with restrictions)
     def delete_product(self, request, *args, **kwargs):
-        try:
-            if request.user.is_authenticated ==  False:
-                return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
-            validator = validate_group(request.user, ['administrator','sellers', 'checkers'])
-            instance = self.get_object()
-            if validator == False and request.user.is_superuser == False:
-                return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
-            if validate_group(request.user, ['sellers']):
-                if instance.seller_id.id != request.user.id:
-                    return JsonResponse({'success':False, 'message':'No ha vendido este producto'}, status=403)
-            instance= self.get_object()
-            self.perform_destroy(instance)
-            return JsonResponse({"Success":True, "message":"El producto fue borrado correctamente"}, status=200)
-        except response.Http404 as e:
-            return JsonResponse({"message":"No existe este producto"}, status=404)
-        except Exception as e:
-            print(e)
-            print(type(e))
-            return JsonResponse({}, status=500)
-
-    # Overrides
-    def perform_create(self, serializer):
-        obj = serializer.save(seller_id=self.request.user)
-        return obj
+        instance= self.get_object()
+        userPerm = uti.hasOrNotPermission(self, request,self.__class__, authClass=[IsSeller,IsAdmin],oneObj=True, obj=instance)
+        print(userPerm)
+        if not any(val is True for val in userPerm.values()):
+            return JsonResponse({"message":"No tiene acceso a esta funcionalidad o producto"}, status=403)
+        self.perform_destroy(instance)
+        return JsonResponse({"Success":True, "message":"El producto fue borrado correctamente"}, status=200)
 
 class CategoryView(viewsets.ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     authentication_classes = [authentication.TokenAuthentication]
+    permission_classes = [IsAuthenticated,IsGroupAccepted]
 
     #GET all Categories
     def nested_list_categories(self, request):
-        try: 
-            if request.user.is_authenticated == False:
-                return JsonResponse({'message':'No autorizado'}, status=401)
-            categories = Category.objects.all()
-            serializer = CategorySerializer(categories, many=True)
-            dicc = format_data(serializer.data, 'categorias')
-            return JsonResponse(dicc, status=dicc['status'])   
-        except Exception as e:
-            dicc=format_data(code=500)
-            print(e)
-            return JsonResponse(dicc, status=dicc['status'])
+        incldProd = request.GET.get('prod','false')
+        categories = Category.objects.all()
+        serializer = CategorySerializer(categories, many=True)
+        if incldProd == 'true': 
+            for item in serializer.data:
+                item.pop('products')
+        return JsonResponse(serializer.data, status=200, safe=False)   
+
 
     # GET one Category 
     def get_category(self, request, *args,**kwargs):
-        try:
-            instance = self.get_object()
-            serializer = self.get_serializer(instance)
-            return JsonResponse(serializer.data, status=200)
-        except response.Http404:
-            return JsonResponse({'message':'No se encuentra la categoria',  'status':404}, status=404)
-        except Exception as e: 
-            print(type(e))
-            return JsonResponse({'message':'Error'}, status=500)
+        incldProd = request.GET.get('prod','false')
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        result = serializer.data
+        
+        if incldProd == 'true': 
+            result.pop('products')
+            print(result)
+        return JsonResponse(result, status=200)
         
     # POST One category
     def post_category(self, request):
-        try:
-            try: 
-                serializer = self.get_serializer(data=request.data)
-                serializer.is_valid(raise_exception = True)
-            except exceptions.UnsupportedMediaType as e:
-                return JsonResponse({'message':'El formato de su request no es valido', 'status':400}, status=400)
-            except exceptions.ValidationError as e:
-                return JsonResponse({'message':e.detail, 'status':400}, status=400)
-            self.perform_create(serializer)
-            headers = self.get_success_headers(serializer.data)
-            return JsonResponse(serializer.data, status=201, headers=headers)
-        except Exception as e:
-            dicc = format_data(code=500)
-            return JsonResponse(dicc, status=dicc['status'])
+        userPermision = uti.hasOrNotPermission(self, request, self.__class__, authClass=[IsAdmin])
+        if not userPermision['IsAdmin']:
+            return JsonResponse({'message':'No esta autorizado para esto'},status=400)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception = True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return JsonResponse(serializer.data, status=200)
     
-    # PUT Instance
     def update_category(self, request, *args, **kwargs):
-        try:
-            instance = self.get_object()
-            serializer = self.get_serializer(instance, data=request.data)
-            serializer.is_valid(raise_exception=True)
-        except response.Http404:
-            return JsonResponse({'message':'No se encuentra la categoria', 'status':404}, status=404)
-        except exceptions.UnsupportedMediaType as e:
-            return JsonResponse({'message':'El formato de su request no es valido', 'status':400}, status=400)
-        except exceptions.ValidationError as e:
-            return JsonResponse({'message':'Ha dejado uno o mas campos requeridos vacios', 'status':400}, status=400)
-        except Exception as e:
-            print(e)
-            dicc = format_data(code=500)
-            return JsonResponse(dicc, status=dicc['status'])
+        userPermision = uti.hasOrNotPermission(self, request, self.__class__, authClass=[IsAdmin])
+        if not userPermision['IsAdmin']:
+            return JsonResponse({'message':'No esta autorizado para esto'},status=400)
+        instance = self.get_object()
+        print(instance)
+        serializer = self.get_serializer(instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
-        return JsonResponse({'message':'El campo ha sido actualizado', 'status':200}, status=200)
+        return JsonResponse({'message':'El campo ha sido actualizado','result':serializer.data,'status':200}, status=200)
 
     # DELETE Category
     def destroy_category(self, request, *args, **kwargs):
-        try:
-            instance = self.get_object()
-            self.perform_destroy(instance)
-        except response.Http404:
-            return JsonResponse({'message':'No se encuentra la categoria', 'status':404}, status=404)
-        except Exception as e:
-            print(e)
-            dicc = format_data(code=500)
-            return JsonResponse(dicc, status=dicc['status'])
+        userPermision = uti.hasOrNotPermission(self, request, self.__class__, authClass=[IsAdmin])
+        if not userPermision['IsAdmin']:
+            return JsonResponse({'message':'No esta autorizado para esto'},status=400)
+        instance = self.get_object()
+        self.perform_destroy(instance)
         return JsonResponse({'message': 'El campo fue borrado correctamente', 'status':200}, status=200)
 
 class UserView(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
+    authentication_classes = [authentication.TokenAuthentication]
+    permission_classes = [IsAuthenticated, IsGroupAccepted]
 
-    # GET one User
     def get_all_users(self, request, *args, **kwargs):
-        if request.user.is_authenticated ==  False:
-            return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
-        validator = validate_group(request.user, ['administrator','sellers', 'checkers','buyers'])
-        if validator == False and request.user.is_superuser == False:
-            return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
-        val = validate_group(request.user, ['sellers','buyers', 'checkers'])
-        if val == True:
+        userPermision = uti.hasOrNotPermission(self, request, self.__class__, authClass=[IsAdmin])
+        if not userPermision['IsAdmin']:
             instances = User.objects.filter(id=request.user.id)
         else:
             instances = User.objects.all()
         serializer  = UserSerializer(instances, many=True)
-        dicc = format_data(serializer.data, 'categorias')
-        return JsonResponse(dicc, status=200)
+        return JsonResponse(serializer.data, status=200, safe=False)
         
-    #POST new User
     def post_user(self, request, *args, **kwargs):
-        try:
-            serializer = UserCreatorSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            user = serializer.save()
-            serializerRep = UserSerializer(user)   
-            return JsonResponse(serializerRep.data, status=200)
-        except exceptions.ValidationError as e:
-            return JsonResponse({'message': e.detail, 'status':400}, status=400)
-        except (exceptions.UnsupportedMediaType, exceptions.ParseError) as e:
-            return JsonResponse({'message':'El formato de su request no es valido', 'status':400}, status=400)
-        except Exception as e:
-            print(e)
-            print(type(e))
-            return JsonResponse({'message':'Hubo un error en el servidor', 'status':500}, status=500)
+        serializer = UserCreatorSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        serializerRep = UserSerializer(user)   
+        return JsonResponse(serializerRep.data, status=200)
+
 
     # GET one User
     def get_user(self, request, *args, **kwargs):
-        try:
-            instance = self.get_object()
-            serializer = self.get_serializer(instance)
-            result = format_data(serializer.data)
-            return JsonResponse(result, status=200)
-        except Exception as e:
-            print(e)
-            return JsonResponse({'message':'Hubo un error en el servidor'}, status=500) 
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        result = format_data(serializer.data)
+        return JsonResponse(result, status=200)
 
 
     # DELETE one User
     def delete_user(self, request, *args, **kwargs):
-        try: 
-            instance=self.get_object()
-            self.perform_destroy(instance=instance)
-            return JsonResponse({'message':'El usuario ha sido eliminado correctamente', 'status':200}, status=200)
-        except Exception as e:
-            print(e)
-            return JsonResponse({'message':'error en el server', 'status':500}, status=500)
+        instance=self.get_object()
+        userPermision = uti.hasOrNotPermission(self, request, self.__class__, authClass=[IsAdmin],oneObj=True,obj=instance)
+        if not userPermision['IsAdmin']:
+            return {'message':'Largo de aqui'}
+        self.perform_destroy(instance=instance)
+        return JsonResponse({'message':'El usuario ha sido eliminado correctamente', 'status':200}, status=200)
+    
+    def get_permissions(self):
+        if self.action == 'post_user':
+            permission_classes = [AllowAny]
+        else:
+            permission_classes = self.permission_classes
+        return [permission() for permission in permission_classes]
 
 class LogoutView(APIView):
-    permission_classes = [IsAuthenticated]
-    
+    permission_classes = [IsAuthenticated,IsGroupAccepted]
+
     def get(self, request, *args, **kwargs):
         dataAuth = request.headers.get('Authorization')
         token = dataAuth.split(' ')[1]
@@ -345,9 +279,8 @@ class TransactsView(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsGroupAccepted]
 
     def get_all_transacts(self, request):
-        sellerComp = True if IsSeller.has_permission(self, request, self.__class__) else False
-        buyerComp = True if IsBuyer.has_permission(self, request, self.__class__) else False
-        if sellerComp == True or buyerComp == True:
+        userPermision = uti.hasOrNotPermission(self, request, self.__class__, authClass=[IsAdmin])
+        if not userPermission['IsAdmin']:
             transacts = Transacts.objects.filter(buyers_id=request.user.id)
         else:
             transacts = Transacts.objects.all()
@@ -363,12 +296,12 @@ class TransactsView(viewsets.ModelViewSet):
 
     def delete_transact(self, request, *args, **kwargs):
         transact = self.get_object()
-        buyerComp = True if IsBuyer.has_object_permission(self, request, self.__class__, transact) else False
-        if buyerComp == True:
-            self.perform_destroy(transact)
-            return JsonResponse({'message':'Transaccion eliminada exitosamente'},status=204)
-        else:
-            return JsonResponse({'message':'No tiene acceso a esta'},status=404)
+        userPermision = uti.hasOrNotPermission(self, request, self.__class__, authClass=[IsAdmin, IsSeller, IsBuyer], oneObj=True,obj=transact)
+        print(userPermision)
+        if not any(value for value in userPermision.values()):
+            return JsonResponse({'message':'No tiene permiso para realizar esta accion'}, status=403)
+        self.perform_destroy(transact)
+        return JsonResponse({'message':'Transaccion eliminada exitosamente'},status=204)
 
 class GroupsView(viewsets.ModelViewSet):
 

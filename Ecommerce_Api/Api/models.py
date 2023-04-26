@@ -53,7 +53,7 @@ class Category(models.Model):
 
 class Product(models.Model):
     nameProduct = models.CharField(max_length=50)
-    priceProduct = models.CharField(max_length=50)
+    priceProduct = models.DecimalField(max_digits=10, decimal_places=2)
     dateReleased = models.DateField(auto_now_add=True)
     active = models.BooleanField(default=False)
     is_digital = models.BooleanField(default=False)
