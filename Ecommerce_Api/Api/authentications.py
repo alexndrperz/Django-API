@@ -28,7 +28,7 @@ class IsSeller(BaseAuthentication):
 class IsBuyer(BaseAuthentication):
     def has_permission(self, request,view):
         user =request.user
-        if user.groups.filter(name="buyers").exists() or is_superuser:
+        if user.groups.filter(name="buyers").exists():
             return True
         else:
             return False

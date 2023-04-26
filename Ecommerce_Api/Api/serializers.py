@@ -152,20 +152,37 @@ class CategoryNestedSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    seller = UserNestedSerializer()
-    category = CategoryNestedSerializer()
+    seller = UserNestedSerializer(read_only=True)
+    category = CategoryNestedSerializer(read_only=True)
+    category_id = serializers.IntegerField(required=True, write_only=True)
 
     class Meta:
         model = Product
-        fields = ['id','nameProduct','priceProduct','dateReleased','is_digital','active','seller', 'category']
+        fields = [
+                    'id',
+                    'nameProduct',
+                    'priceProduct',
+                    'dateReleased',
+                    'is_digital',
+                    'active',
+                    'seller', 
+                    'category',
+                    'category_id'
+                ]
 
-class ProductCreatorSerializer(serializers.ModelSerializer):
-    seller_id = serializers.ReadOnlyField()
-    
-    class Meta:
-        model  = Product
-        fields = ['id','nameProduct','priceProduct', 'active','category_id', 'seller_id']
-
+    def create(self, validated_data):
+        request = self.context.get('request')
+        print(validated_data)
+        category_id = validated_data.pop('category_id', None)
+        validated_data.pop('seller_id')
+        seller = User.objects.get(id=request.user.id)
+        print(seller.id)
+        try:
+            category = Category.objects.get(id=category_id)
+        except:
+            raise exceptions.ValidationError("La categoria especificada no existe")
+        product = Product.objects.create(seller=seller, category=category, **validated_data)
+        return product
 
 
 # class SellerSerializer(serializers.ModelSerializer):

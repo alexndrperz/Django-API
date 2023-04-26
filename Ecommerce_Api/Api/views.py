@@ -17,7 +17,6 @@ from .serializers import (TransactsSerializer,
                           CategorySerializer,
                           CategoryWithoutProductsSerializer, 
                           ProductSerializer,
-                          ProductCreatorSerializer,
                           UserSerializer,
                           UserCreatorSerializer,
                           UserNestedSerializer,
@@ -88,59 +87,45 @@ class ProductView(viewsets.ModelViewSet):
     # GET all Products (with restrictions for sellers)
     def nested_list_products(self, request):
         user_products= request.GET.get('userProducts','false')
-        if user_products == 'true':
-            products = Product.objects.filter(seller_id=request.user.id, active=True)
-            print("filtrado")
-        elif user_products == 'false':
-            products = Product.objects.all()
-        else:
-            return JsonResponse({"Message":"Not Found"}, status=400)
-        serializer= ProductSerializer(products, many=True)
-        return JsonResponse(serializer.data, status=200,safe=False)
+        last_products= request.GET.get('lately','false')
+        digital=request.GET.get('digital','false')
+        start_time= datetime.now()-timedelta(hours=24)
+        filters = {
+            'seller_id': None if user_products =='false' else request.user.id,
+            'active': True if user_products == 'true' else None,
+            'dateReleased__gte': start_time if last_products =='true' and not user_products == 'true' else None,
+            'is_digital': True if digital == 'true' else None,
+        }
+        products = Product.objects.all()
+        for key, value in filters.items():
+            if value is not None:
+                products = products.filter(Q(**{key: value}))
+        if not products:
+            return JsonResponse({"Message": "No se encontraron productos con los presentes requerimientos"})
+        serializer = ProductSerializer(products, many=True)
+        return JsonResponse(serializer.data, status=200, safe=False)
+
     
     # GET just one product (Also with restricctions)
     def get_product(self, request, *args, **kwargs):
         instance = self.get_object()
-        permission = hasOrNotPermission(self, request, self.__class__,obj=instance,oneObj=True,authClass=IsSeller)
-        if not permission: 
-            return JsonResponse({'success':False, 'message':'No ha vendido este producto'}, status=404)
-        
         serializer = self.get_serializer(instance)
         return JsonResponse(serializer.data,status=200)
-    
-    # GET Digital Products (Checkers)
-    def get_digital_products(self, request):
-        checkersComp = hasOrNotPermission(self,request, self.__class__,authClass=IsChecker)
-        adminsComp = hasOrNotPermission(self,request, self.__class__, authClass=IsAdmin)
-        if checkersComp or adminsComp:
-            products = Product.objects.filter(is_digital=True)
-            serializer = ProductSerializer(products, many=True)
-            return JsonResponse(serializer.data, status=200, safe=False)
-        else: 
-            return JsonResponse({"message":"No tienes permiso"}, status=401)
-    
-    # GET Last Products
-    def get_last_products(self, request):
-        now = datetime.now()
-        start_time= now-timedelta(hours=24)
-        products = Product.objects.filter(Q(dateReleased__gte=start_time))
-        print(products)
-        return 
 
     # POST a new product (Taking Seller id)
     def post_product(self,request):
-        if request.user.is_authenticated ==  False:
-            return JsonResponse({'success':False,'message':'No esta autenticado'}, status=401)
-        validator = validate_group(request.user, ['administrator','sellers', 'checkers'])
-        if validator == False and request.user.is_superuser == False:
-            return JsonResponse({'success':False,'message':'No esta autorizado'}, status=403)
-        serializer = ProductCreatorSerializer(data=request.data)
+        sellerPermision = hasOrNotPermission(self, request,self.__class__, authClass=IsSeller)
+        checkerPermision = hasOrNotPermission(self, request,self.__class__, authClass=IsChecker)
+        buyerPermsision = hasOrNotPermission(self, request,self.__class__, authClass=IsBuyer)
+        
+        if not sellerPermision and checkerPermision or buyerPermsision:
+            return JsonResponse({"message":"No tiene permiso para realizar esta accion"}, status=403)
+        serializer = ProductSerializer(data=request.data, context={'request':request})
         serializer.is_valid(raise_exception=True)
-        obj = self.perform_create(serializer)
-        serializerResp = ProductSerializer(obj)
+        self.perform_create(serializer)
         self.get_success_headers(serializer.data)
-        return JsonResponse(serializerResp.data, status=200)
-    
+        return JsonResponse(serializer.data, status=200)
+ 
     # PUT a product created by a seller
     def update_product(self, request,*args, **kwargs):
         try:
