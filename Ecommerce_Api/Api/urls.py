@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import ProductView, CategoryView,TransactsView,UserView, AuthenticationView, GroupsView, LogoutView, InvitationCodeView
+from .views import ProductView, CategoryView,TransactsView,UserView, AuthenticationView, GroupsView, LogoutView, InvitationCodeView, RoleRequestsView
 
 urlpatterns = [
     path('productos',ProductView.as_view({'get':'nested_list_products','post':'post_product'}), name='listOfProducts' ),
@@ -8,6 +8,7 @@ urlpatterns = [
     path('categorias/<int:pk>', CategoryView.as_view({'put': 'update_category', 'get':'get_category','delete':'destroy_category'}, name='Update_and_Get_Categorie')),
     path('groups', GroupsView.as_view({'get':'nested_list'}), name='Groups_list'),
     path('users',UserView.as_view({'get':'get_all_users','post':'post_user'}), name='List_Users'),
+    path('rolechanges', RoleRequestsView.as_view({'get':'get_role_requests','post':'post_role_request',}), name='roleChanges'),
     path('users/authenticate',AuthenticationView.as_view(), name='Get_token'),
     path('users/logout',LogoutView.as_view(), name='logout'),
     path('users/<int:pk>', UserView.as_view({'get':'get_user','delete':'delete_user','put':'put_user_data'})),

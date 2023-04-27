@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from .utils import services as uti
 from django.core import serializers
 from rest_framework.views import APIView
-from .models import Product,Category,Transacts,User,InvitationCodes
+from .models import Product,Category,Transacts,User,InvitationCodes,RoleRequests
 from .serializers import (TransactsSerializer, 
                           CategorySerializer,
                           CategoryWithoutProductsSerializer, 
@@ -23,6 +23,7 @@ from .serializers import (TransactsSerializer,
                           UserCreatorSerializer,
                           UserNestedSerializer,
                           InvitationCodesSerializer,
+                          RoleRequestsSerializer,
                           AuthenticationSerializer,
                           GroupsSerializer)
 
@@ -244,8 +245,12 @@ class UserView(viewsets.ModelViewSet):
         if not userPermision['IsAdmin'] and roles=='true':
             return JsonResponse({'message':'No tiene permiso para esta funcion'}, status=403)
         if roles:
-            print(roles)
-        return JsonResponse({}, status=200)
+            serializer = UserCreatorSerializer(userObj,data=request.data, partial=True, context={"roles":roles})
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            serializer= UserSerializer(userObj)
+            print(serializer.data)
+        return JsonResponse(serializer.data, status=200)
     
     def post_groups_request(self, request):
         serializer = RoleRequestSerializer(data=request.data)
@@ -353,3 +358,40 @@ class InvitationCodeView(viewsets.ModelViewSet):
             return JsonResponse(result, status=201)
         return JsonResponse({"success":False},status=400)
 
+class RoleRequestsView(viewsets.ModelViewSet):
+    authentication_classes = [authentication.TokenAuthentication]
+    permission_classes = [IsAuthenticated,IsGroupAccepted]
+
+    def get_role_requests(self, request):
+        still = False if request.GET.get('still','false') == 'true' else True
+        is_pass = True if request.GET.get('isPass', 'false') == 'true' else False
+        userPerm = uti.hasOrNotPermission(self, request, self.__class__, authClass=[IsAdmin])
+        print(userPerm)
+        if not userPerm['IsAdmin']:
+            return JsonResponse({'message':'No tiene permiso para realizar esta accion'})
+        else:
+            print(still)
+            print(is_pass)
+            if not still and not is_pass:
+                request = RoleRequests.objects.all()
+            elif is_pass:
+                request = RoleRequests.objects.filter(is_password=is_pass)
+            elif still:
+                request = RoleRequests.objects.filter(approved=True)
+            else:
+                request = RoleRequests.objects.filter(approved=True, is_password=is_pass)
+            serializer = RoleRequestsSerializer(request, many=True)
+            return JsonResponse(serializer.data,status=200, safe=False)
+
+    def post_role_request(self, request):
+        print(request.data)
+        userPerm = uti.hasOrNotPermission(self, request, self.__class__, authClass=[IsAdmin])
+
+
+        if not userPerm['IsAdmin'] and 'approved' in request.data.keys(): 
+            return JsonResponse({"message":"No tiene permiso para realizar esta accion"}, status=401)
+
+        serializer = RoleRequestsSerializer(data=request.data,context={'request':request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return JsonResponse(serializer.data, safe=False)

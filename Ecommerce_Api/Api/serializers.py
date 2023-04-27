@@ -1,6 +1,6 @@
 from django.forms import ValidationError
 from rest_framework import serializers,exceptions
-from .models import Category, Product,Transacts,User,InvitationCodes
+from .models import Category, Product,Transacts,User,InvitationCodes,RoleRequests
 from django.contrib.auth import get_user_model, authenticate
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Group
@@ -101,25 +101,41 @@ class UserCreatorSerializer(serializers.ModelSerializer):
         user.groups.add(group)
         return user
 
-    class RoleChangesRequest(serializers.ModelSerializer):
-        user = UserNestedSerializer(read_only=True)
-        class Meta:
-            fields = ['id', 'is_role','is_password','message','user','approved']
-            write_only_fields = ['is_role','is_password']
+    def update(self, instance, validated_data):
+        if self.context.get('roles') and any("is_active" or "group" or "password" in validated_data.keys()):
+            raise serializers.ValidationError({"message":"Acceso a estas propiedades no tienes"})
+        else:
+
+            
+
+class RoleRequestsSerializer(serializers.ModelSerializer):
+    user = UserNestedSerializer(read_only=True)
+    class Meta:
+        model =RoleRequests
+        fields = ['id', 'is_role','is_password','message','user','approved']
+        write_only_fields = ['is_role','is_password']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        listT = []
+        if data['is_role']:
+            listT.append('Role Change')
+        if data['is_password']:
+            listT.append('Password Change')
+        data['type'] = listT
+        return data
+
+    
+    def create(self, validated_data):
         
-        def create(self, validated_data):
-            role = validated_data.get('is_role')
-            password = validated_data.get('is_password')
-            listTypes = []
-            if not role and not password:
-                raise serializers.ValidationError({'message':'Debe especificar un tipo valido'})
-            if role:
-                listTypes.append('Role Change')
-            if password:
-                listTypes.append('Password Recuperation')
-            user=User.objects.get(id=self.context.get('request').id)
-            roleRequest = RoleRequests.objects.create(user=user, **validated_data)
-            return roleRequest
+        role = validated_data.get('is_role')
+        password = validated_data.get('is_password')
+        listTypes = []
+        if not role and not password:
+            raise serializers.ValidationError({'message':'Debe especificar un tipo valido'})
+        user=User.objects.get(id=self.context.get('request').user.id)
+        roleRequest = RoleRequests.objects.create(user=user, **validated_data)
+        return roleRequest
 
         # not_found_groups = []
         # groups = []

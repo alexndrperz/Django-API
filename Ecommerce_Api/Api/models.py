@@ -80,3 +80,9 @@ class InvitationCodes(models.Model):
         super().save(*args, **kwargs)
 
 
+class RoleRequests(models.Model):
+    is_role = models.BooleanField()
+    is_password = models.BooleanField()
+    message = models.CharField(max_length=100)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    approved = models.BooleanField(default=False)
