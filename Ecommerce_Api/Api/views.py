@@ -189,7 +189,6 @@ class CategoryView(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception = True)
         self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
         return JsonResponse(serializer.data, status=200)
     
     def update_category(self, request, *args, **kwargs):
@@ -233,6 +232,27 @@ class UserView(viewsets.ModelViewSet):
         user = serializer.save()
         serializerRep = UserSerializer(user)   
         return JsonResponse(serializerRep.data, status=200)
+
+    def put_user_data(self, request, *args, **kwargs):
+        roles=request.GET.get('roles','false')
+        userObj = self.get_object()
+        print(userObj)
+        userPermision = uti.hasOrNotPermission(self, request, self.__class__, authClass=[IsAdmin, IsSeller,IsChecker, IsBuyer], oneObj=True, obj=userObj)
+        print(userPermision)
+        if not any(val is True for val in userPermision.values()):
+            return JsonResponse({"message":"No tiene acceso a este objeto",'ID':request.user.id})
+        if not userPermision['IsAdmin'] and roles=='true':
+            return JsonResponse({'message':'No tiene permiso para esta funcion'}, status=403)
+        if roles:
+            print(roles)
+        return JsonResponse({}, status=200)
+    
+    def post_groups_request(self, request):
+        serializer = RoleRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()   
+        return JsonResponse(serializer.data, status=200)
+    
 
 
     # GET one User
@@ -280,7 +300,7 @@ class TransactsView(viewsets.ModelViewSet):
 
     def get_all_transacts(self, request):
         userPermision = uti.hasOrNotPermission(self, request, self.__class__, authClass=[IsAdmin])
-        if not userPermission['IsAdmin']:
+        if not userPermision['IsAdmin']:
             transacts = Transacts.objects.filter(buyers_id=request.user.id)
         else:
             transacts = Transacts.objects.all()

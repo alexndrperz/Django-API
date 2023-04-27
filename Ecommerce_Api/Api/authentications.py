@@ -15,7 +15,9 @@ class IsAdmin(BaseAuthentication):
     
     def has_object_permission(self, request, view,obj):
         user =request.user
+        print(user.groups.values_list('name',flat=True))
         if user.groups.filter(name="administrator").exists() or user.is_superuser:
+            print("233")
             if view.__name__== 'ProductsView':
                 if 'administrator' in obj.seller.groups.values_list('name',flat=True) or obj.seller.is_superuser:
                     if request.user.id == obj.seller.id:
@@ -34,6 +36,16 @@ class IsAdmin(BaseAuthentication):
                         print("Hola Amnigo")
                 else:
                     return True
+            elif view.__name__=='UserView':
+                    print("hello")
+                    if 'administrator' in obj.groups.values_list('name',flat=True) or obj.is_superuser:
+                        if request.user.id == obj.id:
+                            return True
+                        else:
+                            return False
+                            print("Hola Amnigo")
+                    else:
+                        return True
         else:
             return False
 
@@ -73,9 +85,14 @@ class IsBuyer(BaseAuthentication):
                 return True
             else:
                 return False
-            return True
         elif view.__name__ == "ProductView":
             return False
+        elif view.__name__=='UserView':
+            print("Hola")
+            if request.user.id == obj.id:
+                return True
+            else:
+                return False
 
 class IsChecker(BaseAuthentication):
     def has_permission(self, request,view):

@@ -14,10 +14,8 @@ class CustomBackend(BaseBackend):
         UserModel = User
         print(make_password(password))
         try:
-            user = UserModel.objects.get(email=email, password=make_password(password))
-            print('Amigos amigos')
-            print(user)
-            if user.check_password:
+            user = UserModel.objects.get(email=email)
+            if user.check_password(password):
                 current_time = datetime.now(current_timezone)
                 user.last_login = current_time
                 user.save()

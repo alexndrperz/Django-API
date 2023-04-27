@@ -37,6 +37,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     USERNAME_FIELD = 'email'
     objects = UserManager()
 
+
     @property
     def purchases_count(self):
         return self.transacts_set.count()

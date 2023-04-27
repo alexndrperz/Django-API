@@ -26,8 +26,17 @@ class GroupsSerializer(serializers.Serializer):
 
     def get_users_count(self, obj):
         count = obj.user_set.count()
-        return count 
+        return count
+     
+class UserNestedSerializer(serializers.ModelSerializer):
+    group= serializers.SerializerMethodField()
 
+    class Meta:
+        model= get_user_model()
+        fields = ['id','name','is_active','group']
+
+    def get_group(self, obj):
+        return list(obj.groups.values_list('name',flat=True))
 
 class UserSerializer(serializers.ModelSerializer):
     group = serializers.SerializerMethodField()
@@ -86,12 +95,31 @@ class UserCreatorSerializer(serializers.ModelSerializer):
             message = "Code de invitacion previamente usado o expirado"
             raise serializers.ValidationError({"message":message})
         group = Group.objects.get(name=group_name[0]) 
-        validated_data['password'] = make_password(validated_data['password'])
+        print(validated_data)
         print(validated_data)
         user = User.objects.create_user(**validated_data)
         user.groups.add(group)
         return user
 
+    class RoleChangesRequest(serializers.ModelSerializer):
+        user = UserNestedSerializer(read_only=True)
+        class Meta:
+            fields = ['id', 'is_role','is_password','message','user','approved']
+            write_only_fields = ['is_role','is_password']
+        
+        def create(self, validated_data):
+            role = validated_data.get('is_role')
+            password = validated_data.get('is_password')
+            listTypes = []
+            if not role and not password:
+                raise serializers.ValidationError({'message':'Debe especificar un tipo valido'})
+            if role:
+                listTypes.append('Role Change')
+            if password:
+                listTypes.append('Password Recuperation')
+            user=User.objects.get(id=self.context.get('request').id)
+            roleRequest = RoleRequests.objects.create(user=user, **validated_data)
+            return roleRequest
 
         # not_found_groups = []
         # groups = []
