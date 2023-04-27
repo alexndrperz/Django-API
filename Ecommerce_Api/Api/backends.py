@@ -1,6 +1,7 @@
 from django.contrib.auth.backends import BaseBackend
-from datetime import timezone, datetime
+from datetime import datetime
 import pytz
+from django.contrib.auth.hashers import make_password
 from .models import User
 from django.conf import settings
 from django.contrib.auth.backends import ModelBackend
@@ -10,10 +11,11 @@ current_timezone = pytz.timezone(settings.TIME_ZONE)
 class CustomBackend(BaseBackend):
 
     def authenticate(self, request, email=None, password=None, *args, **kwargss):
-        print('asdasd')
         UserModel = User
+        print(make_password(password))
         try:
-            user = UserModel.objects.get(email=email)
+            user = UserModel.objects.get(email=email, password=make_password(password))
+            print('Amigos amigos')
             print(user)
             if user.check_password:
                 current_time = datetime.now(current_timezone)

@@ -77,7 +77,7 @@ class UserCreatorSerializer(serializers.ModelSerializer):
                 invitationObj = InvitationCodes.objects.get(invitationCodes=invitation_code)
         except:
             message = "No se ha encontrado su codigo de invitacion"
-            raise serializer.ValidationError({"message":message})    
+            raise serializers.ValidationError({"message":message})    
         if invitationObj.is_used == False and invitationObj.is_expired == False:
             serializer = InvitationCodesSerializer(instance=invitationObj, data={'is_used':True})
             if serializer.is_valid():
@@ -87,6 +87,7 @@ class UserCreatorSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"message":message})
         group = Group.objects.get(name=group_name[0]) 
         validated_data['password'] = make_password(validated_data['password'])
+        print(validated_data)
         user = User.objects.create_user(**validated_data)
         user.groups.add(group)
         return user
