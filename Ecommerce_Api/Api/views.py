@@ -244,12 +244,11 @@ class UserView(viewsets.ModelViewSet):
             return JsonResponse({"message":"No tiene acceso a este objeto",'ID':request.user.id})
         if not userPermision['IsAdmin'] and roles=='true':
             return JsonResponse({'message':'No tiene permiso para esta funcion'}, status=403)
-        if roles:
-            serializer = UserCreatorSerializer(userObj,data=request.data, partial=True, context={"roles":roles})
-            serializer.is_valid(raise_exception=True)
-            self.perform_update(serializer)
-            serializer= UserSerializer(userObj)
-            print(serializer.data)
+        serializer = UserCreatorSerializer(userObj,data=request.data, partial=True, context={"roles":roles})
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        serializer= UserSerializer(userObj)
+        print(serializer.data)
         return JsonResponse(serializer.data, status=200)
     
     def post_groups_request(self, request):

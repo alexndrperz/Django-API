@@ -102,10 +102,14 @@ class UserCreatorSerializer(serializers.ModelSerializer):
         return user
 
     def update(self, instance, validated_data):
-        if self.context.get('roles') and any("is_active" or "group" or "password" in validated_data.keys()):
+        evidence= True if "is_active" in validated_data.keys() or "group" in validated_data.keys()  or "password" in validated_data.keys() else False
+        roles = True if self.context.get('roles') == 'true' else False
+        print(evidence)
+        if not roles and evidence:
+            print(roles)
+            print(evidence)
             raise serializers.ValidationError({"message":"Acceso a estas propiedades no tienes"})
-        else:
-
+        return super().update(instance, validated_data)
             
 
 class RoleRequestsSerializer(serializers.ModelSerializer):
