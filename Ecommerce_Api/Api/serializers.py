@@ -70,15 +70,15 @@ class InvitationCodesSerializer(serializers.ModelSerializer):
         fields=['invitationCodes','description','is_used','is_expired','created_at','expire_date']
 
 class UserCreatorSerializer(serializers.ModelSerializer):
-    group_names = serializers.ListField(child=serializers.CharField(), read_only=True)
+    group_name = serializers.CharField
     invitation_code = serializers.CharField()
     class Meta:
         model = get_user_model() 
-        fields = ['id','email','password','name','is_active','group_names', 'invitation_code']
+        fields = ['id','email','password','name','is_active','group_name', 'invitation_code','delete_group']
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
-        group_name = validated_data.pop('group_names', ["buyers"])
+        group_name = validated_data.pop('group_names', None)
         invitation_code = validated_data.pop('invitation_code',None)
         message = ""
         try:
@@ -102,6 +102,8 @@ class UserCreatorSerializer(serializers.ModelSerializer):
         return user
 
     def update(self, instance, validated_data):
+        group_name = validated_data.pop('group_name', False)
+        delete_group = validated_data.pop('delete_group', False)
         evidence= True if "is_active" in validated_data.keys() or "group" in validated_data.keys()  or "password" in validated_data.keys() else False
         roles = True if self.context.get('roles') == 'true' else False
         print(evidence)
@@ -109,6 +111,27 @@ class UserCreatorSerializer(serializers.ModelSerializer):
             print(roles)
             print(evidence)
             raise serializers.ValidationError({"message":"Acceso a estas propiedades no tienes"})
+
+        not_found_groups = []
+        groups = []
+        if group_name: 
+                try:
+                    group = Group.objects.get(name=group_name)
+                    groups.append(group)
+                except Group.DoesNotExist:
+                    not_found_groups.append(group_name)
+            if not_found_groups:
+                message = f"Groups {', '.join(not_found_groups)} not found"
+                raise serializers.ValidationError(message, code=400)
+            validated_data['password'] = make_password(validated_data['password'])
+            for group in groups:
+                user.groups.add(group)
+
+        if delete_group:
+            groups = [group.id for group in user.groups.all()]
+            group = Groups.objects.get(id=groups.index(delete_group))
+            user.groups.remove(group)
+            
         return super().update(instance, validated_data)
             
 
