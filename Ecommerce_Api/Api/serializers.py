@@ -115,22 +115,22 @@ class UserCreatorSerializer(serializers.ModelSerializer):
         not_found_groups = []
         groups = []
         if group_name: 
-                try:
-                    group = Group.objects.get(name=group_name)
-                    groups.append(group)
-                except Group.DoesNotExist:
-                    not_found_groups.append(group_name)
+            try:
+                group = Group.objects.get(name=group_name)
+                groups.append(group)
+            except Group.DoesNotExist:
+                not_found_groups.append(group_name)
             if not_found_groups:
                 message = f"Groups {', '.join(not_found_groups)} not found"
                 raise serializers.ValidationError(message, code=400)
-            validated_data['password'] = make_password(validated_data['password'])
-            for group in groups:
-                user.groups.add(group)
+            instance.groups.add(group_name)
+        validated_data['password'] = make_password(validated_data['password'])
+
 
         if delete_group:
             groups = [group.id for group in user.groups.all()]
             group = Groups.objects.get(id=groups.index(delete_group))
-            user.groups.remove(group)
+            instance.groups.remove(group)
             
         return super().update(instance, validated_data)
             
