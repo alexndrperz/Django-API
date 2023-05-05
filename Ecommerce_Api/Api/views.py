@@ -1,10 +1,12 @@
-from django.views import View
+from rest_framework.views import APIView
 from django.http import response
 from rest_framework import viewsets,permissions, authentication,mixins, exceptions
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import permission_classes
 from django.http.response import JsonResponse 
 from .authentications import IsAdmin, IsSeller, IsChecker, IsBuyer, IsGroupAccepted, AllowAny
+from rest_framework.decorators import api_view
+from drf_yasg import openapi
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.views import  ObtainAuthToken
 from rest_framework.authtoken.models import  Token
@@ -13,7 +15,6 @@ from django.db.models import Q
 from datetime import datetime, timedelta
 from .utils import services as uti
 from django.core import serializers
-from rest_framework.views import APIView
 from .models import Product,Category,Transacts,User,InvitationCodes,RoleRequests
 from .serializers import (TransactsSerializer, 
                           CategorySerializer,
@@ -159,6 +160,7 @@ class CategoryView(viewsets.ModelViewSet):
     authentication_classes = [authentication.TokenAuthentication]
     permission_classes = [IsAuthenticated,IsGroupAccepted]
 
+    @api_view(['GET'])
     #GET all Categories
     def nested_list_categories(self, request):
         incldProd = request.GET.get('prod','false')
@@ -360,6 +362,7 @@ class InvitationCodeView(viewsets.ModelViewSet):
 class RoleRequestsView(viewsets.ModelViewSet):
     authentication_classes = [authentication.TokenAuthentication]
     permission_classes = [IsAuthenticated,IsGroupAccepted]
+    serializer_class = RoleRequestsSerializer
 
     def get_role_requests(self, request):
         still = False if request.GET.get('still','false') == 'true' else True

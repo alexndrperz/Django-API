@@ -48,6 +48,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = get_user_model() 
         extra_kwargs = {'password':{'write_only':True}}
         fields = ['id','email','password','name','is_active','group', 'last_login', 'shares_count', 'purchases_count']
+        ref_name = 'UserSerializer'
 
     def get_shares_count(self, obj):
         return obj.shares_count
@@ -70,15 +71,18 @@ class InvitationCodesSerializer(serializers.ModelSerializer):
         fields=['invitationCodes','description','is_used','is_expired','created_at','expire_date']
 
 class UserCreatorSerializer(serializers.ModelSerializer):
-    group_name = serializers.CharField
+    add_group = serializers.CharField()
+    delete_group= serializers.CharField()
     invitation_code = serializers.CharField()
+
     class Meta:
         model = get_user_model() 
-        fields = ['id','email','password','name','is_active','group_name', 'invitation_code','delete_group']
+        fields = ['id','email','password','name','is_active','add_group', 'invitation_code', 'delete_group']
         extra_kwargs = {'password': {'write_only': True}}
+        ref_name = 'UserCreatorSerializer'
 
     def create(self, validated_data):
-        group_name = validated_data.pop('group_names', None)
+        group_name = ["buyers"]
         invitation_code = validated_data.pop('invitation_code',None)
         message = ""
         try:
@@ -102,11 +106,11 @@ class UserCreatorSerializer(serializers.ModelSerializer):
         return user
 
     def update(self, instance, validated_data):
-        group_name = validated_data.pop('group_name', False)
+        print(validated_data)
+        group_name = validated_data.pop('add_group', False)
         delete_group = validated_data.pop('delete_group', False)
-        evidence= True if "is_active" in validated_data.keys() or "group" in validated_data.keys()  or "password" in validated_data.keys() else False
+        evidence= True if "is_active" in validated_data.keys() or "group" in validated_data.keys() or "group_name" in validated_data.keys()  or "password" in validated_data.keys() else False
         roles = True if self.context.get('roles') == 'true' else False
-        print(evidence)
         if not roles and evidence:
             print(roles)
             print(evidence)
@@ -123,15 +127,18 @@ class UserCreatorSerializer(serializers.ModelSerializer):
             if not_found_groups:
                 message = f"Groups {', '.join(not_found_groups)} not found"
                 raise serializers.ValidationError(message, code=400)
-            instance.groups.add(group_name)
-        validated_data['password'] = make_password(validated_data['password'])
+            instance.groups.add(group)
 
-
+        
+        print(delete_group)
         if delete_group:
-            groups = [group.id for group in user.groups.all()]
-            group = Groups.objects.get(id=groups.index(delete_group))
-            instance.groups.remove(group)
-            
+                try:
+                    groupIns = Group.objects.get(name=delete_group)
+                except:
+                    raise serializers.ValidationError(f"Grupo {delete_group} no existe")
+                print(groupIns)
+                print(groupIns)
+                instance.groups.remove(groupIns)
         return super().update(instance, validated_data)
             
 
@@ -141,6 +148,7 @@ class RoleRequestsSerializer(serializers.ModelSerializer):
         model =RoleRequests
         fields = ['id', 'is_role','is_password','message','user','approved']
         write_only_fields = ['is_role','is_password']
+        ref_name = 'UserSerializer'
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -189,6 +197,7 @@ class UserNestedSerializer(serializers.ModelSerializer):
     class Meta:
         model= get_user_model()
         fields = ['id','name','is_active','group']
+        ref_name="nesteduser"
 
     def get_group(self, obj):
         return list(obj.groups.values_list('name',flat=True))
@@ -212,6 +221,7 @@ class CategorySerializer(serializers.ModelSerializer):
             return products
         products = Product.objects.filter(category_id=obj.id, active=True)
         return ProductSerializer(products, many=True).data
+
 
 class CategoryWithoutProductsSerializer(serializers.ModelSerializer):
     product_count = serializers.SerializerMethodField()

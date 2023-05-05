@@ -158,3 +158,4 @@ AUTHENTICATION_BACKENDS = [
     'Api.backends.CustomBackend',
     'django.contrib.auth.backends.ModelBackend'
 ]
+
