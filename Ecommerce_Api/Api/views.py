@@ -6,7 +6,6 @@ from rest_framework.decorators import permission_classes
 from django.http.response import JsonResponse 
 from .authentications import IsAdmin, IsSeller, IsChecker, IsBuyer, IsGroupAccepted, AllowAny
 from rest_framework.decorators import api_view
-from drf_yasg import openapi
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.authtoken.views import  ObtainAuthToken
 from rest_framework.authtoken.models import  Token
@@ -27,59 +26,6 @@ from .serializers import (TransactsSerializer,
                           RoleRequestsSerializer,
                           AuthenticationSerializer,
                           GroupsSerializer)
-
-def format_data(data=None, nameClass=None, code=200):
-    status = 0
-    if data==None and nameClass==None and code==200:
-        return "No hay nada en la funcion"
-    if code ==500:
-        return {'message':'Ha habido un error en el servidor', 'status':code}
-    if (len(data) > 0):
-        result = {
-            'success':True,
-            nameClass:data,
-            'status':code
-        }
-    else: 
-        result = {
-            'success':False,
-            'message': f'No hay {nameClass} en la BD',
-            'status':404
-        }
-    return result
-
-def hasOrNotPermission(clss, request, view,obj=None,authClass=None, oneObj=False):
-    if authClass != None:
-        if oneObj== False:
-            userComp = True if authClass.has_permission(clss, request, view) else False
-
-        else:
-            userComp = True if authClass.has_object_permission(clss, request,view,obj) else False
-    return userComp
-
-
-
-def validate_credentials(request,userProperty=None,groups=[],is_one_item=False, is_limited=False):
-    if request.user.is_authenticated ==  False:
-       return {'success':False,'status':401, 'message':'No esta autorizado'}
-    validator = validate_group(request.user, ['administrator','sellers', 'checkers','buyers'])
-    if validator == False and request.user.is_superuser == False:
-        return {'success':False,'status':403}
-    if is_limited:
-            return {'success':True, 'userid':request.user.id}
-    if is_one_item and is_limited:
-        if validate_group(request.user, groups):
-            if userProperty.id != request.user.id:
-                return {'success':False,'status':403}
-
-
-def validate_group(user, groups):
-    if list(user.groups.values_list('name',flat=True)) == []:
-        return None
-    if list(user.groups.values_list('name',flat=True))[0] not in groups:
-        return False
-    else:
-        return True
 
 
 class ProductView(viewsets.ModelViewSet):
@@ -226,6 +172,7 @@ class UserView(viewsets.ModelViewSet):
             instances = User.objects.filter(id=request.user.id)
         else:
             instances = User.objects.all()
+        print(uti.Count_24hours_users(User))
         serializer  = UserSerializer(instances, many=True)
         return JsonResponse(serializer.data, status=200, safe=False)
         

@@ -50,6 +50,10 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id','email','password','name','is_active','group', 'last_login', 'shares_count', 'purchases_count']
         ref_name = 'UserSerializer'
 
+    def all_users_24hours_count():
+        now = timezone.now()
+        print(now)
+
     def get_shares_count(self, obj):
         return obj.shares_count
 
@@ -60,6 +64,7 @@ class UserSerializer(serializers.ModelSerializer):
     def get_group(self, obj):
         print(obj)
         return list(obj.groups.values_list('name',flat=True))
+
 
 
     
